@@ -100,14 +100,13 @@ export const createBaseProductSchema = () => {
       productType: {
         type: String,
         required: true,
-        enum: ["iPhone", "iPad", "Mac", "AirPods", "AppleWatch", "Accessory"],
+        trim: true,
       },
 
       category: {
         type: String,
         required: true,
         trim: true,
-        enum: ["iPhone", "iPad", "Mac", "AirPods", "AppleWatch", "Accessories"],
       },
 
       status: {
@@ -142,10 +141,19 @@ export const createBaseProductSchema = () => {
   // HOOKS
   // ============================================
   schema.pre("save", function (next) {
-    if (this.baseSlug && !this.slug) {
-      this.slug = this.baseSlug;
+    try {
+      if (this.baseSlug && !this.slug) {
+        this.slug = this.baseSlug;
+      }
+      if (!this.category && this.productType) {
+        // Fallback: set category from productType for backward compatibility
+        this.category = this.productType;
+      }
+      next();
+    } catch (err) {
+      console.error("BaseProduct pre-save error:", err);
+      next(err);
     }
-    next();
   });
 
   // ============================================
@@ -173,6 +181,8 @@ export const createBaseProductSchema = () => {
   schema.index({ createdAt: -1 });
   schema.index({ salesCount: -1 });
   schema.index({ category: 1, salesCount: -1 });
+  // Optional reference to dynamic Category collection (not enforced by schema to keep compatibility)
+  // Use virtuals or external validation against Category model in controllers.
 
   return schema;
 };

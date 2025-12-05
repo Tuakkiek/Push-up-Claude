@@ -33,6 +33,8 @@ import vnpayRoutes from "./routes/vnpayRoutes.js";
 import { cancelExpiredVNPayOrders } from "./services/orderCleanupService.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import shortVideoRoutes from "./routes/shortVideoRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
+import customSpecRoutes from "./routes/customSpecRoutes.js";
 
 dotenv.config();
 
@@ -154,11 +156,13 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/accessories", accessoryRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/pos", posRoutes);
+app.use("/api/categories", categoryRoutes);
 
 app.use("/api/payment/vnpay", vnpayRoutes);
 
 app.use("/api/homepage", homePageRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/custom-specs", customSpecRoutes);
 
 // ✅ SHORT VIDEOS ROUTE
 app.use("/api/short-videos", shortVideoRoutes);

@@ -374,6 +374,13 @@ export const shortVideoAPI = {
   reorder: (videoIds) => api.put("/short-videos/reorder", { videoIds }),
 };
 
+export const customSpecAPI = {
+  getAll: () => api.get("/custom-specs"),
+  getByCategory: (category) => api.get(`/custom-specs/${category}`),
+  update: (category, data) => api.put(`/custom-specs/${category}`, data),
+  resetToDefault: (category) => api.post(`/custom-specs/${category}/reset`),
+};
+
 // ============================================
 // EXPORT DEFAULT
 // ============================================
@@ -397,4 +404,5 @@ export default {
   getAllProductsForCategory,
   getTopNewProducts,
   handleApiError,
+  customSpecAPI,
 };

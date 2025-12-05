@@ -4,89 +4,54 @@
 // ============================================
 
 import { findProductById, PRODUCT_MODELS } from "../models/Product.js";
+import Category from "../models/Category.js";
 
 // Get related products
 export const getRelatedProducts = async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const { id } = req.params;
+    console.log("[Products] getRelatedProducts id=", id);
+    const product = await findProductById(id);
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy sản phẩm",
-      });
+      console.warn("[Products] getRelatedProducts not found:", id);
+      return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm" });
     }
 
-    // Get the correct model for this product's category
+    // Try to get model for this product's category (fallback logic will be improved later)
     const Model = PRODUCT_MODELS[product.category];
     if (!Model) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy danh mục sản phẩm",
-      });
+      console.warn("[Products] No model for category:", product.category);
+      return res.status(404).json({ success: false, message: "Không tìm thấy danh mục sản phẩm" });
     }
 
-    // Get collection name for variants based on category
+    // Correct collection names for variants (fallback to `${category}variants`)
     const variantCollectionMap = {
       iPhone: "iphonevariants",
-      iPad: "ipadvariant",
-      Mac: "macvariant",
-      AirPods: "airpodsvariant",
-      AppleWatch: "applewatchvariant",
-      Accessory: "accessoryvariant",
+      iPad: "ipadvariants",
+      Mac: "macvariants",
+      AirPods: "airpodsvariants",
+      AppleWatch: "applewatchvariants",
+      Accessory: "accessoryvariants",
     };
 
-    const variantCollection = variantCollectionMap[product.category] || `${product.category.toLowerCase()}variants`;
+    const variantCollection = variantCollectionMap[product.category] || `${String(product.category).toLowerCase()}variants`;
 
     const pipeline = [
-      {
-        $match: {
-          _id: { $ne: product._id },
-          category: product.category,
-          condition: product.condition,
-          status: "AVAILABLE",
-        },
-      },
-      {
-        $lookup: {
-          from: variantCollection,
-          localField: "_id",
-          foreignField: "productId",
-          as: "variants",
-        },
-      },
-      { $limit: 4 },
+      { $match: { _id: { $ne: product._id }, category: product.category, condition: product.condition, status: "AVAILABLE" } },
+      { $lookup: { from: variantCollection, localField: "_id", foreignField: "productId", as: "variants" } },
       { $sort: { averageRating: -1 } },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          model: 1,
-          category: 1,
-          images: 1,
-          price: 1,
-          originalPrice: 1,
-          averageRating: 1,
-          totalReviews: 1,
-          variants: 1,
-          baseSlug: 1,
-          installmentBadge: 1,
-        },
-      },
+      { $limit: 4 },
+      { $project: { _id: 1, name: 1, model: 1, category: 1, images: 1, price: 1, originalPrice: 1, averageRating: 1, totalReviews: 1, variants: 1, baseSlug: 1, installmentBadge: 1 } },
     ];
 
     const products = await Model.aggregate(pipeline);
+    console.log(`[Products] related for ${product.category} ->`, products.length);
 
-    res.json({
-      success: true,
-      data: { products },
-    });
+    res.json({ success: true, data: { products } });
   } catch (error) {
-    console.error("Error getting related products:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("[Products] getRelatedProducts error:", error);
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -127,10 +92,14 @@ export const deleteVariant = async (req, res) => {
 };
 
 export const getCategories = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    message: "Endpoint not implemented",
-  });
+  try {
+    const categories = await Category.find({ active: true }).lean();
+    console.log("[Products] getCategories count=", categories.length);
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    console.error("[Products] getCategories error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 export const getAllProducts = async (req, res) => {

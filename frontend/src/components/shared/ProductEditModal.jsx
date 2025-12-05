@@ -30,6 +30,7 @@ import UnifiedVariantsForm from "@/components/shared/variants/UnifiedVariantsFor
 import AirPodsSpecsForm from "@/components/shared/specs/AirPodsSpecsForm";
 import AppleWatchSpecsForm from "@/components/shared/specs/AppleWatchSpecsForm";
 import AccessoriesSpecsForm from "@/components/shared/specs/AccessoriesSpecsForm";
+import DynamicSpecsForm from "@/components/shared/specs/DynamicSpecsForm";
 
 // Variant Forms (Chỉ giữ lại cho AirPods, AppleWatch, Accessories)
 import AirPodsVariantsForm from "@/components/shared/variants/AirPodsVariantsForm";
@@ -56,6 +57,8 @@ const ProductEditModal = ({
   const effectiveCategory = isEdit ? product?.category : category;
 
   const [activeFormTab, setActiveFormTab] = useState("basic");
+  const [customSpecConfig, setCustomSpecConfig] = useState(null); // ✅ NEW
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false); // ✅ NEW
 
   // 1. Hook quản lý State và Basic Handlers
   const {
@@ -109,8 +112,27 @@ const ProductEditModal = ({
 
   // === RENDER SPECS FORM (CẬP NHẬT) ===
   const renderSpecsForm = useCallback(() => {
-    if (!formData) return null;
+    if (!formData || isLoadingConfig) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Đang tải cấu hình...</p>
+        </div>
+      );
+    }
 
+    // ✅ Nếu category bật useCustomSpecs → dùng DynamicSpecsForm
+    if (customSpecConfig?.useCustomSpecs) {
+      return (
+        <DynamicSpecsForm
+          fields={customSpecConfig.fields}
+          specs={formData.specifications || {}}
+          onChange={handleSpecChange}
+        />
+      );
+    }
+
+    // ✅ Ngược lại → dùng form cũ (iPhone/iPad/Mac/...)
     const props = {
       specs: formData.specifications || {},
       onChange: handleSpecChange,
@@ -147,6 +169,8 @@ const ProductEditModal = ({
   }, [
     formData,
     effectiveCategory,
+    customSpecConfig,
+    isLoadingConfig,
     handleSpecChange,
     handleColorChange,
     addColor,
@@ -203,6 +227,25 @@ const ProductEditModal = ({
     addVariantOption,
     removeVariantOption,
   ]);
+
+  useEffect(() => {
+    if (!open || !effectiveCategory) return;
+
+    const fetchCustomConfig = async () => {
+      setIsLoadingConfig(true);
+      try {
+        const response = await customSpecAPI.getByCategory(effectiveCategory);
+        setCustomSpecConfig(response.data.data.customSpec);
+      } catch (error) {
+        console.error("Failed to fetch custom spec config:", error);
+        setCustomSpecConfig(null);
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    };
+
+    fetchCustomConfig();
+  }, [open, effectiveCategory]);
 
   // === RENDER LOADING STATE ===
   if (!formData || !effectiveCategory) {

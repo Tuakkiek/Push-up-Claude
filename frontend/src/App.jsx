@@ -47,6 +47,7 @@ import SearchResultsPage from "@/pages/SearchResultsPage";
 import VideosPage from "@/pages/VideosPage"; // ✅ NEW
 
 import VNPayReturnPage from "@/pages/customer/VNPayReturnPage";
+import CustomSpecsManager from "./pages/admin/CustomSpecsManager";
 
 // ============================================
 // SCROLL TO TOP
@@ -198,6 +199,8 @@ function App() {
           <Route path="/admin/promotions" element={<PromotionsPage />} />
           <Route path="/admin/homepage-editor" element={<HomePageEditor />} />
           <Route path="/admin/short-videos" element={<ShortVideoAdminPage />} />
+
+          <Route path="/admin/custom-specs" element={<CustomSpecsManager />} />
         </Route>
 
         {/* ========================================
