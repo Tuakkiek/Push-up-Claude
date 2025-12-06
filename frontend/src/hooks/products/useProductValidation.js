@@ -1,3 +1,4 @@
+// frontend/src/hooks/products/useProductValidation.js
 import { useCallback } from "react";
 import { toast } from "sonner";
 
@@ -43,7 +44,7 @@ export const useProductValidation = (
       for (let j = 0; j < variant.options.length; j++) {
         const option = variant.options[j];
 
-        // VALIDATION THEO CATEGORY
+        // ✅ VALIDATION THEO CATEGORY
         if (effectiveCategory === "iPhone" && !option.storage?.trim()) {
           toast.error(
             `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${i + 1}`
@@ -55,14 +56,18 @@ export const useProductValidation = (
         if (effectiveCategory === "iPad") {
           if (!option.storage?.trim()) {
             toast.error(
-              `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${i + 1}`
+              `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${
+                i + 1
+              }`
             );
             setActiveFormTab("variants");
             return false;
           }
           if (!option.connectivity?.trim()) {
             toast.error(
-              `Vui lòng chọn kết nối cho phiên bản ${j + 1} của biến thể ${i + 1}`
+              `Vui lòng chọn kết nối cho phiên bản ${j + 1} của biến thể ${
+                i + 1
+              }`
             );
             setActiveFormTab("variants");
             return false;
@@ -76,47 +81,62 @@ export const useProductValidation = (
             !option.storage?.trim()
           ) {
             toast.error(
-              `Vui lòng nhập đầy đủ CPU-GPU, RAM và Storage cho phiên bản ${j + 1} của biến thể ${i + 1}`
+              `Vui lòng nhập đầy đủ CPU-GPU, RAM và Storage cho phiên bản ${
+                j + 1
+              } của biến thể ${i + 1}`
             );
             setActiveFormTab("variants");
             return false;
           }
         }
 
-        if (
-          ["AirPods", "AppleWatch", "Accessories"].includes(effectiveCategory)
-        ) {
-          if (!option.variantName?.trim()) {
-            toast.error(
-              `Vui lòng nhập tên biến thể cho phiên bản ${j + 1} của biến thể ${i + 1}`
-            );
-            setActiveFormTab("variants");
-            return false;
-          }
+        // ✅ VALIDATION CHO DYNAMIC CATEGORIES (variantName)
+        const needsVariantName = !["iPhone", "iPad", "Mac"].includes(
+          effectiveCategory
+        );
+
+        if (needsVariantName && !option.variantName?.trim()) {
+          toast.error(
+            `Vui lòng nhập tên biến thể cho phiên bản ${j + 1} của biến thể ${
+              i + 1
+            }`
+          );
+          setActiveFormTab("variants");
+          return false;
         }
 
-        // BỎ VALIDATION SKU (backend sinh)
+        // VALIDATION GIÁ
         const price = Number(option.price);
         const originalPrice = Number(option.originalPrice);
 
         if (!option.price?.trim() || isNaN(price) || price < 0) {
           toast.error(
-            `Vui lòng nhập giá bán hợp lệ cho phiên bản ${j + 1} của biến thể ${i + 1}`
+            `Vui lòng nhập giá bán hợp lệ cho phiên bản ${j + 1} của biến thể ${
+              i + 1
+            }`
           );
           setActiveFormTab("variants");
           return false;
         }
-        if (!option.originalPrice?.trim() || isNaN(originalPrice) || originalPrice < 0) {
+        if (
+          !option.originalPrice?.trim() ||
+          isNaN(originalPrice) ||
+          originalPrice < 0
+        ) {
           toast.error(
-            `Vui lòng nhập giá gốc hợp lệ cho phiên bản ${j + 1} của biến thể ${i + 1}`
+            `Vui lòng nhập giá gốc hợp lệ cho phiên bản ${j + 1} của biến thể ${
+              i + 1
+            }`
           );
           setActiveFormTab("variants");
           return false;
         }
-        
+
         if (price > originalPrice && originalPrice > 0) {
           toast.error(
-            `Giá bán không được lớn hơn giá gốc tại phiên bản ${j + 1} của biến thể ${i + 1}`
+            `Giá bán không được lớn hơn giá gốc tại phiên bản ${
+              j + 1
+            } của biến thể ${i + 1}`
           );
           setActiveFormTab("variants");
           return false;

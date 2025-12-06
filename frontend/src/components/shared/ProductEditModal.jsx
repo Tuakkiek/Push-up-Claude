@@ -32,10 +32,11 @@ import AppleWatchSpecsForm from "@/components/shared/specs/AppleWatchSpecsForm";
 import AccessoriesSpecsForm from "@/components/shared/specs/AccessoriesSpecsForm";
 import DynamicSpecsForm from "@/components/shared/specs/DynamicSpecsForm";
 
-// Variant Forms (Chỉ giữ lại cho AirPods, AppleWatch, Accessories)
+// Variant Forms
 import AirPodsVariantsForm from "@/components/shared/variants/AirPodsVariantsForm";
 import AppleWatchVariantsForm from "@/components/shared/variants/AppleWatchVariantsForm";
 import AccessoriesVariantsForm from "@/components/shared/variants/AccessoriesVariantsForm";
+import DynamicVariantsForm from "@/components/shared/variants/DynamicVariantsForm"; // ✅ NEW
 
 // Constants & Hooks
 import { INSTALLMENT_BADGE_OPTIONS } from "@/lib/productConstants";
@@ -43,6 +44,7 @@ import { useProductForm } from "@/hooks/products/useProductForm";
 import { useVariantForm } from "@/hooks/products/useVariantForm";
 import { useProductValidation } from "@/hooks/products/useProductValidation";
 import { useProductAPI } from "@/hooks/products/useProductAPI";
+import { customSpecAPI } from "@/lib/api"; // ✅ IMPORT
 import { Plus, Trash2 } from "lucide-react";
 
 const ProductEditModal = ({
@@ -57,8 +59,8 @@ const ProductEditModal = ({
   const effectiveCategory = isEdit ? product?.category : category;
 
   const [activeFormTab, setActiveFormTab] = useState("basic");
-  const [customSpecConfig, setCustomSpecConfig] = useState(null); // ✅ NEW
-  const [isLoadingConfig, setIsLoadingConfig] = useState(false); // ✅ NEW
+  const [customSpecConfig, setCustomSpecConfig] = useState(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
   // 1. Hook quản lý State và Basic Handlers
   const {
@@ -104,13 +106,43 @@ const ProductEditModal = ({
     onSave
   );
 
-  // Gắn formData vào handleSubmit
   const handleSubmit = useCallback(
     (e) => submitAPI(e, formData),
     [submitAPI, formData]
   );
 
-  // === RENDER SPECS FORM (CẬP NHẬT) ===
+  // ✅ FETCH CUSTOM SPEC CONFIG
+  useEffect(() => {
+    if (!open || !effectiveCategory) return;
+
+    const fetchCustomConfig = async () => {
+      setIsLoadingConfig(true);
+      try {
+        const categorySlug = effectiveCategory.toLowerCase();
+        const response = await customSpecAPI.getByCategory(categorySlug);
+        const customSpec = response.data?.data?.customSpec;
+
+        console.log("📦 Custom spec loaded:", customSpec);
+
+        setCustomSpecConfig({
+          useCustomSpecs: customSpec?.useCustomSpecs ?? false,
+          fields: Array.isArray(customSpec?.fields) ? customSpec.fields : [],
+        });
+      } catch (error) {
+        console.error("Failed to fetch custom spec config:", error);
+        setCustomSpecConfig({
+          useCustomSpecs: false,
+          fields: [],
+        });
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    };
+
+    fetchCustomConfig();
+  }, [open, effectiveCategory]);
+
+  // === RENDER SPECS FORM ===
   const renderSpecsForm = useCallback(() => {
     if (!formData || isLoadingConfig) {
       return (
@@ -132,7 +164,6 @@ const ProductEditModal = ({
       );
     }
 
-    // ✅ Ngược lại → dùng form cũ (iPhone/iPad/Mac/...)
     const props = {
       specs: formData.specifications || {},
       onChange: handleSpecChange,
@@ -180,7 +211,7 @@ const ProductEditModal = ({
     removeCustomSpec,
   ]);
 
-  // === RENDER VARIANTS FORM (CẬP NHẬT) ===
+  // === RENDER VARIANTS FORM ===
   const renderVariantsForm = useCallback(() => {
     if (!formData) return null;
 
@@ -198,6 +229,13 @@ const ProductEditModal = ({
       model: formData.model,
     };
 
+    // ✅ NẾU LÀ CATEGORY MỚI (có custom specs) → DÙNG DynamicVariantsForm
+    const isNewCategory = customSpecConfig?.useCustomSpecs;
+
+    if (isNewCategory) {
+      return <DynamicVariantsForm {...props} />;
+    }
+
     // DÙNG UNIFIED FORM CHO iPhone/iPad/Mac
     if (["iPhone", "iPad", "Mac"].includes(effectiveCategory)) {
       return <UnifiedVariantsForm category={effectiveCategory} {...props} />;
@@ -212,11 +250,13 @@ const ProductEditModal = ({
       case "Accessories":
         return <AccessoriesVariantsForm {...props} />;
       default:
-        return null;
+        // ✅ FALLBACK: Dùng Dynamic cho category không xác định
+        return <DynamicVariantsForm {...props} />;
     }
   }, [
     formData,
     effectiveCategory,
+    customSpecConfig,
     addVariant,
     removeVariant,
     handleVariantChange,
@@ -228,42 +268,6 @@ const ProductEditModal = ({
     removeVariantOption,
   ]);
 
-  useEffect(() => {
-    if (!open || !effectiveCategory) return;
-
-    const fetchCustomConfig = async () => {
-      setIsLoadingConfig(true);
-      try {
-        // Kiểm tra xem có phải fixed category không
-        const fixedCategories = [
-          "iPhone",
-          "iPad",
-          "Mac",
-          "AirPods",
-          "AppleWatch",
-          "Accessories",
-        ];
-
-        if (!fixedCategories.includes(effectiveCategory)) {
-          // Category mới → LUÔN dùng DynamicSpecsForm
-          const response = await customSpecAPI.getByCategory(effectiveCategory);
-          setCustomSpecConfig(response.data.data.customSpec);
-        } else {
-          // Fixed category → kiểm tra có bật custom không
-          const response = await customSpecAPI.getByCategory(effectiveCategory);
-          setCustomSpecConfig(response.data.data.customSpec);
-        }
-      } catch (error) {
-        console.error("Failed to fetch custom spec config:", error);
-        setCustomSpecConfig(null);
-      } finally {
-        setIsLoadingConfig(false);
-      }
-    };
-
-    fetchCustomConfig();
-  }, [open, effectiveCategory]);
-  // === RENDER LOADING STATE ===
   if (!formData || !effectiveCategory) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -285,7 +289,6 @@ const ProductEditModal = ({
     );
   }
 
-  // === RENDER MAIN MODAL ===
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -421,7 +424,7 @@ const ProductEditModal = ({
                   />
                 </div>
 
-                {/* Featured Images URLs - MULTIPLE */}
+                {/* Featured Images URLs */}
                 <div className="space-y-2">
                   <Label>URL Ảnh Nổi Bật (Featured Images)</Label>
                   {(formData.featuredImages || [""]).map((url, idx) => (
@@ -476,55 +479,6 @@ const ProductEditModal = ({
                     Các ảnh này sẽ hiển thị nổi bật trên trang sản phẩm
                   </p>
                 </div>
-
-                {/* Video URLs - MULTIPLE */}
-                {/* <div className="space-y-2">
-                  <Label>URL Video Giới Thiệu</Label>
-                  {(formData.videoUrls || [""]).map((url, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        value={url}
-                        onChange={(e) => {
-                          const newVideos = [...(formData.videoUrls || [""])];
-                          newVideos[idx] = e.target.value;
-                          handleBasicChange("videoUrls", newVideos);
-                        }}
-                        placeholder="https://youtube.com/watch?v=... hoặc https://example.com/video.mp4"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const newVideos = (formData.videoUrls || [""]).filter(
-                            (_, i) => i !== idx
-                          );
-                          handleBasicChange(
-                            "videoUrls",
-                            newVideos.length ? newVideos : [""]
-                          );
-                        }}
-                        disabled={(formData.videoUrls || [""]).length === 1}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newVideos = [...(formData.videoUrls || [""]), ""];
-                      handleBasicChange("videoUrls", newVideos);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-2" /> Thêm URL video
-                  </Button>
-                  <p className="text-xs text-gray-500">
-                    URL YouTube hoặc video trực tiếp (MP4)
-                  </p>
-                </div> */}
 
                 {/* Video URL */}
                 <div className="space-y-2">

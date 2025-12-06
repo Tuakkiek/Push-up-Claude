@@ -5,11 +5,6 @@ import { getEmptyFormData, emptyVariant } from "@/lib/productConstants";
 
 /**
  * Hook quản lý state và các handler cơ bản cho ProductEditModal
- * @param {boolean} open - Modal có mở không
- * @param {boolean} isEdit - Chế độ chỉnh sửa hay tạo mới
- * @param {string} effectiveCategory - Danh mục sản phẩm
- * @param {object} product - Dữ liệu sản phẩm (nếu ở chế độ edit)
- * @returns {object} { formData, setFormData, handleBasicChange, handleSpecChange, handleColorChange, addColor, removeColor, handleCustomSpecChange, addCustomSpec, removeCustomSpec }
  */
 export const useProductForm = (open, isEdit, effectiveCategory, product) => {
   const [formData, setFormData] = useState(null);
@@ -34,8 +29,19 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
 
     if (isEdit && product) {
       let specs = { ...product.specifications };
-      if (!specs.colors || !Array.isArray(specs.colors)) {
-        specs.colors = [];
+
+      // ✅ CHỈ XỬ LÝ COLORS CHO FIXED CATEGORIES
+      const fixedCategories = [
+        "iPhone",
+        "iPad",
+        "Mac",
+        "AirPods",
+        "AppleWatch",
+      ];
+      if (fixedCategories.includes(effectiveCategory)) {
+        if (!specs.colors || !Array.isArray(specs.colors)) {
+          specs.colors = [];
+        }
       }
 
       const colorGroups = {};
@@ -60,7 +66,7 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
           stock: String(variant.stock || ""),
         };
 
-        // THÊM FIELD PHÙ HỢP THEO CATEGORY
+        // ✅ THÊM FIELD PHÙ HỢP THEO CATEGORY
         if (effectiveCategory === "iPhone") {
           option.storage = String(variant.storage || "");
         } else if (effectiveCategory === "iPad") {
@@ -70,13 +76,9 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
           option.cpuGpu = String(variant.cpuGpu || "");
           option.ram = String(variant.ram || "");
           option.storage = String(variant.storage || "");
-        } else if (
-          ["AirPods", "AppleWatch", "Accessories"].includes(effectiveCategory)
-        ) {
+        } else {
+          // ✅ DYNAMIC CATEGORIES: chỉ cần variantName
           option.variantName = String(variant.variantName || "");
-          if (effectiveCategory === "AppleWatch") {
-            option.bandSize = String(variant.bandSize || "");
-          }
         }
 
         colorGroups[colorKey].options.push(option);
