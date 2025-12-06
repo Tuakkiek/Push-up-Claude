@@ -45,6 +45,9 @@ const CategoryManagement = () => {
     });
   }, [showAddForm, editingId, formData, categories]);
 
+  const authStorage = JSON.parse(localStorage.getItem("auth-storage"));
+  const token = authStorage?.state?.token;
+
   const loadCategories = async () => {
     console.log("📥 Loading categories...");
     setLoading(true);
@@ -146,7 +149,7 @@ const CategoryManagement = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -178,7 +181,7 @@ const CategoryManagement = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -212,7 +215,7 @@ const CategoryManagement = () => {
       const response = await fetch(`/api/categories/${id}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -254,9 +257,10 @@ const CategoryManagement = () => {
     console.log("➕ Add button clicked - Before state update");
     console.log("Current states:", { showAddForm, editingId });
 
-    setShowAddForm(true);
+    // ✅ FIX: Gọi resetForm() TRƯỚC, sau đó mới set showAddForm
+    setFormData({ name: "", slug: "", skuPrefix: "" });
     setEditingId(null);
-    resetForm();
+    setShowAddForm(true);
 
     console.log("➕ Add button clicked - After state update");
   };

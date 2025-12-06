@@ -1,5 +1,6 @@
 // backend/src/controllers/customSpecController.js
 import CustomSpecification from "../models/CustomSpecification.js";
+import Category from "../models/Category.js";
 
 // ============================================
 // GET Custom Specs by Category
@@ -8,17 +9,29 @@ export const getByCategory = async (req, res) => {
   try {
     const { category } = req.params;
 
-    let customSpec = await CustomSpecification.findOne({ category })
+    // ✅ VALIDATE CATEGORY EXISTS
+    const categoryDoc = await Category.findOne({ slug: category });
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: `Category "${category}" không tồn tại`,
+      });
+    }
+
+    // ✅ TÌM CUSTOM SPEC THEO CATEGORY NAME (KHÔNG PHẢI SLUG)
+    let customSpec = await CustomSpecification.findOne({
+      category: categoryDoc.name,
+    })
       .populate("createdBy", "fullName email")
       .populate("updatedBy", "fullName email");
 
-    // Nếu chưa có, trả về config mặc định
+    // ✅ NẾU CHƯA CÓ → TRẢ VỀ DEFAULT CONFIG
     if (!customSpec) {
       return res.json({
         success: true,
         data: {
           customSpec: {
-            category,
+            category: categoryDoc.name,
             useCustomSpecs: false,
             fields: [],
           },
@@ -48,6 +61,15 @@ export const update = async (req, res) => {
     const { useCustomSpecs, fields } = req.body;
     const userId = req.user._id;
 
+    // ✅ VALIDATE CATEGORY EXISTS
+    const categoryDoc = await Category.findOne({ slug: category });
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: `Category "${category}" không tồn tại`,
+      });
+    }
+
     // Validate fields
     if (useCustomSpecs && (!fields || !Array.isArray(fields))) {
       return res.status(400).json({
@@ -68,7 +90,10 @@ export const update = async (req, res) => {
       }
     }
 
-    let customSpec = await CustomSpecification.findOne({ category });
+    // ✅ TÌM THEO CATEGORY NAME
+    let customSpec = await CustomSpecification.findOne({
+      category: categoryDoc.name,
+    });
 
     if (customSpec) {
       // Update existing
@@ -79,7 +104,7 @@ export const update = async (req, res) => {
     } else {
       // Create new
       customSpec = new CustomSpecification({
-        category,
+        category: categoryDoc.name, // ✅ LƯU CATEGORY NAME
         useCustomSpecs,
         fields: fields || [],
         createdBy: userId,
@@ -134,7 +159,19 @@ export const resetToDefault = async (req, res) => {
   try {
     const { category } = req.params;
 
-    const customSpec = await CustomSpecification.findOne({ category });
+    // ✅ VALIDATE CATEGORY EXISTS
+    const categoryDoc = await Category.findOne({ slug: category });
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: `Category "${category}" không tồn tại`,
+      });
+    }
+
+    // ✅ TÌM THEO CATEGORY NAME
+    const customSpec = await CustomSpecification.findOne({
+      category: categoryDoc.name,
+    });
 
     if (customSpec) {
       customSpec.useCustomSpecs = false;
@@ -144,7 +181,7 @@ export const resetToDefault = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Đã reset ${category} về specs mặc định`,
+      message: `Đã reset ${categoryDoc.name} về specs mặc định`,
     });
   } catch (error) {
     console.error("resetToDefault error:", error);

@@ -1,6 +1,11 @@
-// backend/src/routes/customSpecRoutes.js
 import express from "express";
-import controller from "../controllers/customSpecController.js";
+import {
+  getAll,
+  getByCategory,
+  update,
+  resetToDefault,
+} from "../controllers/customSpecController.js";
+
 import { protect, restrictTo } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -10,15 +15,15 @@ router.use(protect);
 router.use(restrictTo("ADMIN"));
 
 // GET all custom specs
-router.get("/", controller.getAll);
+router.get("/", getAll);
 
 // GET custom spec by category
-router.get("/:category", controller.getByCategory);
+router.get("/:category", getByCategory);
 
 // UPDATE custom spec
-router.put("/:category", controller.update);
+router.put("/:category", update);
 
 // RESET to default
-router.post("/:category/reset", controller.resetToDefault);
+router.post("/:category/reset", resetToDefault);
 
 export default router;

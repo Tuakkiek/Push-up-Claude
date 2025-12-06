@@ -37,8 +37,9 @@ const CustomSpecificationSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["iPhone", "iPad", "Mac", "AirPods", "AppleWatch", "Accessories"],
       unique: true,
+      trim: true,
+      // ✅ BỎ ENUM ĐỂ HỖ TRỢ DYNAMIC CATEGORIES
     },
     useCustomSpecs: {
       type: Boolean,
