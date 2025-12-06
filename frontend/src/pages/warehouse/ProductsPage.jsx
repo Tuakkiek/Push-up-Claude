@@ -28,9 +28,15 @@ import ProductCard from "@/components/shared/ProductCard";
 import ProductEditModal from "@/components/shared/ProductEditModal";
 import CSVImporter from "@/components/shared/CSVImporter";
 import { Label } from "@/components/ui/label";
+import { isFixedCategory } from "@/lib/categoryHelpers";
+import {
+  extractProductsArray,
+  extractTotal,
+  debugAPIResponse,
+} from "@/lib/apiDebugHelper";
 
 // ============================================
-// API MAPPING - FIXED CATEGORIES
+// API MAPPING - FIXED CATEGORIES ONLY
 // ============================================
 const FIXED_API_MAP = {
   iPhone: iPhoneAPI,
@@ -41,55 +47,81 @@ const FIXED_API_MAP = {
   Accessories: accessoryAPI,
 };
 
-// ✅ DYNAMIC API - for new categories
-const getDynamicAPI = (category) => ({
-  async getAll(params) {
-    const queryString = new URLSearchParams(params).toString();
-    const response = await fetch(
-      `/api/categories/${category}/products?${queryString}`,
-      {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+// ✅ DYNAMIC API CREATOR
+const createDynamicAPI = (categorySlug) => {
+  const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+
+  const getToken = () => {
+    const authStorage = localStorage.getItem("auth-storage");
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage);
+        return state?.token;
+      } catch (e) {
+        return null;
       }
-    );
-    return response.json();
-  },
-  async create(data) {
-    const response = await fetch(`/api/categories/${category}/products`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify(data),
-    });
-    return response.json();
-  },
-  async update(id, data) {
-    const response = await fetch(`/api/categories/${category}/products/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-      body: JSON.stringify(data),
-    });
-    return response.json();
-  },
-  async delete(id) {
-    const response = await fetch(`/api/categories/${category}/products/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    });
-    return response.json();
-  },
-});
+    }
+    return null;
+  };
+
+  const getAuthHeaders = () => ({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getToken()}`,
+  });
+
+  return {
+    async getAll(params) {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products?${queryString}`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return response.json();
+    },
+    async create(data) {
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(data),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to create product");
+      return response.json();
+    },
+    async update(id, data) {
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products/${id}`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(data),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to update product");
+      return response.json();
+    },
+    async delete(id) {
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products/${id}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to delete product");
+      return response.json();
+    },
+  };
+};
 
 const ProductsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
 
-  // ✅ NEW: Dynamic categories
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
@@ -141,7 +173,7 @@ const ProductsPage = () => {
     setPage(1);
   }, [activeTab, searchQuery]);
 
-  // ✅ NEW: Load categories from API
+  // ✅ Load categories from API
   const loadCategories = async () => {
     console.log("📥 Loading categories...");
     setLoadingCategories(true);
@@ -156,20 +188,12 @@ const ProductsPage = () => {
             value: cat.name,
             label: cat.name,
             slug: cat.slug,
-            isFixed: [
-              "iPhone",
-              "iPad",
-              "Mac",
-              "AirPods",
-              "AppleWatch",
-              "Accessories",
-            ].includes(cat.name),
+            isFixed: isFixedCategory(cat.name),
           }));
 
         console.log("✅ Categories loaded:", activeCats);
         setCategories(activeCats);
 
-        // Set default tab nếu chưa có
         if (!activeTab && activeCats.length > 0) {
           setActiveTab(activeCats[0].value);
         }
@@ -185,25 +209,38 @@ const ProductsPage = () => {
   // ✅ Get API based on category (fixed or dynamic)
   const getAPI = () => {
     const currentCategory = categories.find((c) => c.value === activeTab);
-    if (!currentCategory) return null;
+    if (!currentCategory) {
+      console.error("❌ Category not found:", activeTab);
+      return null;
+    }
 
-    // Nếu là fixed category, dùng API cũ
+    console.log("🔍 Getting API for:", {
+      category: activeTab,
+      isFixed: currentCategory.isFixed,
+      slug: currentCategory.slug,
+    });
+
+    // Use fixed API for fixed categories
     if (currentCategory.isFixed) {
+      console.log("✅ Using FIXED API");
       return FIXED_API_MAP[activeTab];
     }
 
-    // Nếu là category mới, dùng dynamic API
-    return getDynamicAPI(currentCategory.slug);
+    // Use dynamic API for new categories
+    console.log("✅ Using DYNAMIC API with slug:", currentCategory.slug);
+    return createDynamicAPI(currentCategory.slug);
   };
 
   // ============================================
-  // FETCH PRODUCTS
+  // FETCH PRODUCTS - ✅ IMPROVED WITH DEBUG HELPER
   // ============================================
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
       const api = getAPI();
-      if (!api?.getAll) throw new Error("API không hợp lệ");
+      if (!api?.getAll) {
+        throw new Error("API không hợp lệ");
+      }
 
       const response = await api.getAll({
         page,
@@ -211,11 +248,26 @@ const ProductsPage = () => {
         search: searchQuery || undefined,
       });
 
-      const data = response?.data?.data;
-      if (!data) throw new Error("Không có dữ liệu");
+      // ✅ DEBUG RESPONSE
+      debugAPIResponse(`GET /categories/${activeTab}/products`, response, {
+        requireSuccess: true,
+        requireData: true,
+        requiredFields: ["products", "total"],
+      });
 
-      const productsList = data.products || [];
-      const totalCount = data.total || productsList.length;
+      // ✅ CHECK SUCCESS FLAG
+      if (response.success === false) {
+        throw new Error(response.message || "Không thể tải sản phẩm");
+      }
+
+      // ✅ USE HELPER TO EXTRACT DATA
+      const productsList = extractProductsArray(response);
+      const totalCount = extractTotal(response, true);
+
+      console.log("✅ Extracted:", {
+        products: productsList.length,
+        total: totalCount,
+      });
 
       const sortedByDate = [...productsList].sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
@@ -227,7 +279,7 @@ const ProductsPage = () => {
         const res = await analyticsAPI.getTopSellers(activeTab, 10);
         top10SellerIds = res.data.data.map((s) => s.productId);
       } catch (err) {
-        console.warn("Top seller lỗi");
+        console.warn("Top seller không có dữ liệu");
       }
 
       const productsWithFlags = productsList.map((p) => ({
@@ -250,7 +302,8 @@ const ProductsPage = () => {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Lỗi tải sản phẩm");
+      console.error("❌ Fetch products error:", error);
+      toast.error(error.message || "Lỗi tải sản phẩm");
       setProducts([]);
       setTotal(0);
     } finally {
@@ -288,13 +341,18 @@ const ProductsPage = () => {
       return;
     }
 
+    if (!confirm("Bạn có chắc chắn muốn xóa sản phẩm này?")) {
+      return;
+    }
+
     setIsLoading(true);
     try {
       const api = getAPI();
       if (!api || !api.delete) {
         throw new Error(`API for ${activeTab} is not properly configured`);
       }
-      console.log(`✅ Sending DELETE request for product ID: ${productId}`);
+
+      console.log(`✅ Deleting product ID: ${productId}`);
       await api.delete(productId);
       toast.success("Xóa sản phẩm thành công");
 
@@ -304,11 +362,8 @@ const ProductsPage = () => {
         fetchProducts();
       }
     } catch (error) {
-      console.error("❌ Error deleting product:", {
-        message: error.message,
-        response: error.response?.data,
-      });
-      toast.error(error.response?.data?.message || "Xóa sản phẩm thất bại");
+      console.error("❌ Delete error:", error);
+      toast.error(error.message || "Xóa sản phẩm thất bại");
     } finally {
       setIsLoading(false);
     }
@@ -363,8 +418,8 @@ const ProductsPage = () => {
       setJustCreatedProductId(newId);
       fetchProducts();
     } catch (error) {
-      console.error("❌ ERROR:", error.response?.data || error.message);
-      toast.error(error.response?.data?.message || "Lưu sản phẩm thất bại");
+      console.error("❌ ERROR:", error);
+      toast.error(error.message || "Lưu sản phẩm thất bại");
     } finally {
       setIsLoading(false);
     }
@@ -407,7 +462,7 @@ const ProductsPage = () => {
         </div>
       </div>
 
-      {/* CATEGORY TABS - ✅ DYNAMIC */}
+      {/* CATEGORY TABS */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList
           className="grid w-full"
@@ -416,6 +471,9 @@ const ProductsPage = () => {
           {categories.map((cat) => (
             <TabsTrigger key={cat.value} value={cat.value}>
               {cat.label}
+              {!cat.isFixed && (
+                <span className="ml-1 text-xs opacity-60">*</span>
+              )}
             </TabsTrigger>
           ))}
         </TabsList>

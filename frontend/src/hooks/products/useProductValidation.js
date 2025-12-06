@@ -2,6 +2,16 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+// ✅ FIXED CATEGORIES
+const FIXED_CATEGORIES = [
+  "iPhone",
+  "iPad",
+  "Mac",
+  "AirPods",
+  "AppleWatch",
+  "Accessories",
+];
+
 export const useProductValidation = (
   formData,
   effectiveCategory,
@@ -26,6 +36,8 @@ export const useProductValidation = (
       return false;
     }
 
+    const isFixedCategory = FIXED_CATEGORIES.includes(effectiveCategory);
+
     for (let i = 0; i < formData.variants.length; i++) {
       const variant = formData.variants[i];
       if (!variant.color?.trim()) {
@@ -44,17 +56,9 @@ export const useProductValidation = (
       for (let j = 0; j < variant.options.length; j++) {
         const option = variant.options[j];
 
-        // ✅ VALIDATION THEO CATEGORY
-        if (effectiveCategory === "iPhone" && !option.storage?.trim()) {
-          toast.error(
-            `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${i + 1}`
-          );
-          setActiveFormTab("variants");
-          return false;
-        }
-
-        if (effectiveCategory === "iPad") {
-          if (!option.storage?.trim()) {
+        // ✅ VALIDATION FOR FIXED CATEGORIES
+        if (isFixedCategory) {
+          if (effectiveCategory === "iPhone" && !option.storage?.trim()) {
             toast.error(
               `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${
                 i + 1
@@ -63,9 +67,62 @@ export const useProductValidation = (
             setActiveFormTab("variants");
             return false;
           }
-          if (!option.connectivity?.trim()) {
+
+          if (effectiveCategory === "iPad") {
+            if (!option.storage?.trim()) {
+              toast.error(
+                `Vui lòng chọn bộ nhớ cho phiên bản ${j + 1} của biến thể ${
+                  i + 1
+                }`
+              );
+              setActiveFormTab("variants");
+              return false;
+            }
+            if (!option.connectivity?.trim()) {
+              toast.error(
+                `Vui lòng chọn kết nối cho phiên bản ${j + 1} của biến thể ${
+                  i + 1
+                }`
+              );
+              setActiveFormTab("variants");
+              return false;
+            }
+          }
+
+          if (effectiveCategory === "Mac") {
+            if (
+              !option.cpuGpu?.trim() ||
+              !option.ram?.trim() ||
+              !option.storage?.trim()
+            ) {
+              toast.error(
+                `Vui lòng nhập đầy đủ CPU-GPU, RAM và Storage cho phiên bản ${
+                  j + 1
+                } của biến thể ${i + 1}`
+              );
+              setActiveFormTab("variants");
+              return false;
+            }
+          }
+
+          if (
+            ["AirPods", "AppleWatch", "Accessories"].includes(effectiveCategory)
+          ) {
+            if (!option.variantName?.trim()) {
+              toast.error(
+                `Vui lòng nhập tên biến thể cho phiên bản ${
+                  j + 1
+                } của biến thể ${i + 1}`
+              );
+              setActiveFormTab("variants");
+              return false;
+            }
+          }
+        } else {
+          // ✅ VALIDATION FOR DYNAMIC CATEGORIES - Just need variantName
+          if (!option.variantName?.trim()) {
             toast.error(
-              `Vui lòng chọn kết nối cho phiên bản ${j + 1} của biến thể ${
+              `Vui lòng nhập tên biến thể cho phiên bản ${j + 1} của biến thể ${
                 i + 1
               }`
             );
@@ -74,38 +131,7 @@ export const useProductValidation = (
           }
         }
 
-        if (effectiveCategory === "Mac") {
-          if (
-            !option.cpuGpu?.trim() ||
-            !option.ram?.trim() ||
-            !option.storage?.trim()
-          ) {
-            toast.error(
-              `Vui lòng nhập đầy đủ CPU-GPU, RAM và Storage cho phiên bản ${
-                j + 1
-              } của biến thể ${i + 1}`
-            );
-            setActiveFormTab("variants");
-            return false;
-          }
-        }
-
-        // ✅ VALIDATION CHO DYNAMIC CATEGORIES (variantName)
-        const needsVariantName = !["iPhone", "iPad", "Mac"].includes(
-          effectiveCategory
-        );
-
-        if (needsVariantName && !option.variantName?.trim()) {
-          toast.error(
-            `Vui lòng nhập tên biến thể cho phiên bản ${j + 1} của biến thể ${
-              i + 1
-            }`
-          );
-          setActiveFormTab("variants");
-          return false;
-        }
-
-        // VALIDATION GIÁ
+        // ✅ PRICE VALIDATION (COMMON FOR ALL)
         const price = Number(option.price);
         const originalPrice = Number(option.originalPrice);
 

@@ -1,3 +1,4 @@
+// frontend/src/hooks/products/useProductAPI.js
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,13 +10,111 @@ import {
   accessoryAPI,
 } from "@/lib/api";
 
-const API_MAP = {
+// ✅ FIXED CATEGORIES API MAP
+const FIXED_API_MAP = {
   iPhone: iPhoneAPI,
   iPad: iPadAPI,
   Mac: macAPI,
   AirPods: airPodsAPI,
   AppleWatch: appleWatchAPI,
   Accessories: accessoryAPI,
+};
+
+// ✅ FIXED CATEGORIES LIST
+const FIXED_CATEGORIES = [
+  "iPhone",
+  "iPad",
+  "Mac",
+  "AirPods",
+  "AppleWatch",
+  "Accessories",
+];
+
+// ✅ DYNAMIC API GENERATOR
+const createDynamicAPI = (categorySlug) => {
+  const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+  const getToken = () => {
+    const authStorage = localStorage.getItem("auth-storage");
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage);
+        return state?.token;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  return {
+    create: async (data) => {
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify(data),
+        }
+      );
+      return response.json();
+    },
+    update: async (id, data) => {
+      const response = await fetch(
+        `${BASE_URL}/categories/${categorySlug}/products/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify(data),
+        }
+      );
+      return response.json();
+    },
+  };
+};
+
+// ✅ GET API HELPER - HANDLES BOTH FIXED AND DYNAMIC CATEGORIES
+const getAPIForCategory = async (effectiveCategory) => {
+  console.log("🔍 Getting API for category:", effectiveCategory);
+
+  // Check if it's a fixed category
+  if (FIXED_CATEGORIES.includes(effectiveCategory)) {
+    console.log("✅ Using FIXED API for:", effectiveCategory);
+    return FIXED_API_MAP[effectiveCategory];
+  }
+
+  // It's a dynamic category - need to get slug
+  console.log("🔄 Using DYNAMIC API for:", effectiveCategory);
+
+  // Fetch category info to get slug
+  try {
+    const response = await fetch("/api/categories");
+    const data = await response.json();
+
+    if (data.success) {
+      const category = data.data.categories.find(
+        (c) => c.name === effectiveCategory
+      );
+      if (category) {
+        console.log(
+          "✅ Found category:",
+          category.name,
+          "slug:",
+          category.slug
+        );
+        return createDynamicAPI(category.slug);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error fetching categories:", error);
+  }
+
+  throw new Error(`Cannot find API for category: ${effectiveCategory}`);
 };
 
 export const useProductAPI = (
@@ -52,7 +151,7 @@ export const useProductAPI = (
         .replace(/-+/g, "-")
         .replace(/^-+|-+$/g, "");
 
-      cleaned.slug = slug; // <--- THÊM DÒNG NÀY
+      cleaned.slug = slug;
 
       cleaned.variants = (data.variants || [])
         .map((variant) => ({
@@ -66,24 +165,48 @@ export const useProductAPI = (
                 stock: Number(opt.stock || 0),
               };
 
-              if (effectiveCategory === "iPhone") {
-                o.storage = opt.storage;
-              } else if (effectiveCategory === "iPad") {
-                o.storage = opt.storage;
-                o.connectivity = opt.connectivity || "WIFI";
-              } else if (effectiveCategory === "Mac") {
-                o.cpuGpu = opt.cpuGpu;
-                o.ram = opt.ram;
-                o.storage = opt.storage;
-              } else if (
-                ["AirPods", "Accessories", "AppleWatch"].includes(
-                  effectiveCategory
-                )
-              ) {
-                o.variantName = opt.variantName;
-                if (effectiveCategory === "AppleWatch") {
-                  o.bandSize = opt.bandSize || "";
+              // ✅ HANDLE FIELDS BASED ON CATEGORY TYPE
+              if (FIXED_CATEGORIES.includes(effectiveCategory)) {
+                // Fixed categories have specific fields
+                if (effectiveCategory === "iPhone") {
+                  o.storage = opt.storage;
+                } else if (effectiveCategory === "iPad") {
+                  o.storage = opt.storage;
+                  o.connectivity = opt.connectivity || "WIFI";
+                } else if (effectiveCategory === "Mac") {
+                  o.cpuGpu = opt.cpuGpu;
+                  o.ram = opt.ram;
+                  o.storage = opt.storage;
+                } else if (
+                  ["AirPods", "Accessories", "AppleWatch"].includes(
+                    effectiveCategory
+                  )
+                ) {
+                  o.variantName = opt.variantName;
+                  if (effectiveCategory === "AppleWatch") {
+                    o.bandSize = opt.bandSize || "";
+                  }
                 }
+              } else {
+                // ✅ DYNAMIC CATEGORIES: Always use variantName
+                o.variantName = opt.variantName || opt.storage || opt.ram || "";
+
+                // Preserve any additional fields as specs
+                Object.keys(opt).forEach((key) => {
+                  if (
+                    ![
+                      "originalPrice",
+                      "price",
+                      "stock",
+                      "variantName",
+                      "sku",
+                      "images",
+                    ].includes(key)
+                  ) {
+                    if (!o.specs) o.specs = {};
+                    o.specs[key] = opt[key];
+                  }
+                });
               }
 
               return o;
@@ -105,29 +228,39 @@ export const useProductAPI = (
         }
       } else {
         if (Array.isArray(cleaned.specifications)) {
-          cleaned.specifications = {};
+          // ✅ Keep as array for dynamic categories with custom specs
+          if (!FIXED_CATEGORIES.includes(effectiveCategory)) {
+            // It's already an array, keep it
+          } else {
+            cleaned.specifications = {};
+          }
+        } else {
+          // It's an object
+          if (
+            FIXED_CATEGORIES.includes(effectiveCategory) &&
+            effectiveCategory !== "Accessories"
+          ) {
+            cleaned.specifications = {
+              ...cleaned.specifications,
+              colors: Array.isArray(cleaned.specifications.colors)
+                ? cleaned.specifications.colors
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                : [],
+            };
+          }
         }
-        cleaned.specifications = {
-          ...cleaned.specifications,
-          colors: Array.isArray(cleaned.specifications.colors)
-            ? cleaned.specifications.colors
-                .map((c) => String(c).trim())
-                .filter(Boolean)
-            : [],
-        };
       }
 
-      // Lọc bỏ URLs rỗng VÀ GẮN VÀO PAYLOAD
+      // Featured images and video
       cleaned.featuredImages = (cleaned.featuredImages || [])
         .map((url) => url?.trim())
         .filter(Boolean);
 
-      // Chỉ lấy 1 URL đầu tiên nếu là mảng, hoặc trim nếu là string
       cleaned.videoUrl = Array.isArray(cleaned.videoUrl)
         ? cleaned.videoUrl[0]?.trim() || ""
         : cleaned.videoUrl?.trim() || "";
 
-      // ✅ ĐẢM BẢO TRƯỜNG NÀY ĐƯỢC GỬI LÊN
       if (!cleaned.featuredImages) cleaned.featuredImages = [];
       if (!cleaned.videoUrl) cleaned.videoUrl = "";
 
@@ -147,7 +280,9 @@ export const useProductAPI = (
 
       setIsSubmitting(true);
       try {
-        const api = API_MAP[effectiveCategory];
+        // ✅ GET API DYNAMICALLY
+        const api = await getAPIForCategory(effectiveCategory);
+
         if (!api) {
           throw new Error(`API not found for ${effectiveCategory}`);
         }
@@ -156,22 +291,24 @@ export const useProductAPI = (
         let newId = null;
 
         if (isEdit) {
-          await api.update(product._id, payload);
+          const response = await api.update(product._id, payload);
+          console.log("✅ Update response:", response);
           toast.success("Cập nhật sản phẩm thành công!");
         } else {
-          const res = await api.create(payload);
+          const response = await api.create(payload);
+          console.log("✅ Create response:", response);
           newId =
-            res.data?._id ||
-            res.data?.data?._id ||
-            res.data?.data?.product?._id;
+            response.data?._id ||
+            response.data?.data?._id ||
+            response.data?.data?.product?._id;
           toast.success("Tạo sản phẩm thành công!");
         }
 
         onOpenChange(false);
         onSave(newId);
       } catch (error) {
-        console.error("Submit error:", error.response?.data || error);
-        toast.error(error.response?.data?.message || "Lưu thất bại");
+        console.error("❌ Submit error:", error);
+        toast.error(error.message || "Lưu thất bại");
       } finally {
         setIsSubmitting(false);
       }

@@ -9,6 +9,8 @@ const createSlug = (str) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
     .replace(/\s+/g, "-")
     .replace(/[^\w\-]+/g, "")
     .replace(/\-\-+/g, "-")
@@ -113,18 +115,23 @@ const getOrCreateModel = (category, isVariant = false) => {
 };
 
 // ============================================
-// CREATE PRODUCT
+// CREATE PRODUCT - ✅ COMPLETELY FIXED
 // ============================================
 export const createDynamicProduct = async (req, res) => {
   const { category } = req.params;
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  let transactionStarted = false;
 
   try {
+    console.log("🔵 START: Create dynamic product for category:", category);
+
     // Validate category exists
     const categoryDoc = await Category.findOne({ slug: category });
     if (!categoryDoc) {
-      throw new Error("Category không tồn tại");
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
     }
 
     const {
@@ -134,23 +141,57 @@ export const createDynamicProduct = async (req, res) => {
       ...productData
     } = req.body;
 
-    if (!productData.name?.trim()) throw new Error("Tên sản phẩm là bắt buộc");
-    if (!productData.model?.trim()) throw new Error("Model là bắt buộc");
-    if (!productData.createdBy) throw new Error("createdBy là bắt buộc");
+    // Validate required fields
+    if (!productData.name?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Tên sản phẩm là bắt buộc",
+      });
+    }
+    if (!productData.model?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Model là bắt buộc",
+      });
+    }
+    if (!productData.createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: "createdBy là bắt buộc",
+      });
+    }
 
     const finalSlug =
       frontendSlug?.trim() || createSlug(productData.model.trim());
-    if (!finalSlug) throw new Error("Không thể tạo slug từ model");
+    if (!finalSlug) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể tạo slug từ model",
+      });
+    }
 
     const ProductModel = getOrCreateModel(categoryDoc.name);
     const VariantModel = getOrCreateModel(categoryDoc.name, true);
 
+    // Check existing slug BEFORE starting transaction
     const existingBySlug = await ProductModel.findOne({
       $or: [{ slug: finalSlug }, { baseSlug: finalSlug }],
-    }).session(session);
+    });
 
-    if (existingBySlug) throw new Error(`Slug đã tồn tại: ${finalSlug}`);
+    if (existingBySlug) {
+      return res.status(400).json({
+        success: false,
+        message: `Slug đã tồn tại: ${finalSlug}`,
+      });
+    }
 
+    // ✅ NOW start session and transaction
+    session = await mongoose.startSession();
+    session.startTransaction();
+    transactionStarted = true;
+    console.log("✅ Transaction started");
+
+    // Create product
     const product = new ProductModel({
       name: productData.name.trim(),
       model: productData.model.trim(),
@@ -174,7 +215,9 @@ export const createDynamicProduct = async (req, res) => {
     });
 
     await product.save({ session });
+    console.log("✅ Product saved:", product._id);
 
+    // Create variants
     const variantGroups = createVariants || variants || [];
     const createdVariantIds = [];
 
@@ -207,18 +250,26 @@ export const createDynamicProduct = async (req, res) => {
 
           await variantDoc.save({ session });
           createdVariantIds.push(variantDoc._id);
+          console.log("✅ Variant saved:", variantDoc._id);
         }
       }
 
       product.variants = createdVariantIds;
       await product.save({ session });
+      console.log("✅ Product updated with variant IDs");
     }
 
+    // ✅ COMMIT TRANSACTION
     await session.commitTransaction();
+    transactionStarted = false;
+    console.log("✅ Transaction committed successfully");
 
+    // ✅ POPULATE AFTER COMMIT (without session)
     const populated = await ProductModel.findById(product._id)
       .populate("variants")
       .populate("createdBy", "fullName email");
+
+    console.log("✅ Product created successfully:", populated._id);
 
     res.status(201).json({
       success: true,
@@ -226,14 +277,28 @@ export const createDynamicProduct = async (req, res) => {
       data: { product: populated },
     });
   } catch (error) {
-    await session.abortTransaction();
-    console.error("CREATE DYNAMIC PRODUCT ERROR:", error);
+    console.error("❌ CREATE ERROR:", error);
+
+    // ✅ ONLY ABORT IF TRANSACTION IS ACTIVE
+    if (session && transactionStarted) {
+      try {
+        await session.abortTransaction();
+        console.log("⚠️ Transaction aborted");
+      } catch (abortError) {
+        console.error("❌ Error aborting transaction:", abortError.message);
+      }
+    }
+
     res.status(400).json({
       success: false,
       message: error.message || "Lỗi khi tạo sản phẩm",
     });
   } finally {
-    session.endSession();
+    // ✅ ALWAYS END SESSION
+    if (session) {
+      await session.endSession();
+      console.log("🔴 Session ended");
+    }
   }
 };
 
@@ -264,12 +329,15 @@ export const findAllDynamicProducts = async (req, res) => {
     }
     if (status) query.status = status;
 
+    const skip = (page - 1) * limit;
+    const limitNum = parseInt(limit);
+
     const [products, count] = await Promise.all([
       ProductModel.find(query)
         .populate("variants")
         .populate("createdBy", "fullName")
-        .skip((page - 1) * limit)
-        .limit(+limit)
+        .skip(skip)
+        .limit(limitNum)
         .sort({ createdAt: -1 }),
       ProductModel.countDocuments(query),
     ]);
@@ -277,14 +345,24 @@ export const findAllDynamicProducts = async (req, res) => {
     res.json({
       success: true,
       data: {
-        products,
-        totalPages: Math.ceil(count / limit),
-        currentPage: +page,
-        total: count,
+        products: products || [],
+        totalPages: Math.ceil(count / limitNum),
+        currentPage: parseInt(page),
+        total: count || 0,
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("FIND ALL ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      data: {
+        products: [],
+        total: 0,
+        totalPages: 0,
+        currentPage: 1,
+      },
+    });
   }
 };
 
@@ -371,7 +449,7 @@ export const getDynamicProductDetail = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("getDynamicProductDetail error:", error);
+    console.error("GET DETAIL ERROR:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Lỗi server",
@@ -380,22 +458,36 @@ export const getDynamicProductDetail = async (req, res) => {
 };
 
 // ============================================
-// UPDATE & DELETE
+// UPDATE PRODUCT
 // ============================================
 export const updateDynamicProduct = async (req, res) => {
   const { category, id } = req.params;
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  let transactionStarted = false;
 
   try {
     const categoryDoc = await Category.findOne({ slug: category });
-    if (!categoryDoc) throw new Error("Category không tồn tại");
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
 
     const ProductModel = getOrCreateModel(categoryDoc.name);
     const VariantModel = getOrCreateModel(categoryDoc.name, true);
 
-    const product = await ProductModel.findById(id).session(session);
-    if (!product) throw new Error("Không tìm thấy sản phẩm");
+    const product = await ProductModel.findById(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sản phẩm",
+      });
+    }
+
+    session = await mongoose.startSession();
+    session.startTransaction();
+    transactionStarted = true;
 
     const { createVariants, variants, slug: frontendSlug, ...data } = req.body;
 
@@ -452,6 +544,7 @@ export const updateDynamicProduct = async (req, res) => {
     }
 
     await session.commitTransaction();
+    transactionStarted = false;
 
     const populated = await ProductModel.findById(id)
       .populate("variants")
@@ -463,42 +556,86 @@ export const updateDynamicProduct = async (req, res) => {
       data: { product: populated },
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session && transactionStarted) {
+      try {
+        await session.abortTransaction();
+      } catch (abortError) {
+        console.error("Error aborting transaction:", abortError.message);
+      }
+    }
+
     console.error("UPDATE ERROR:", error);
     res.status(400).json({
       success: false,
       message: error.message || "Lỗi cập nhật",
     });
   } finally {
-    session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
+// ============================================
+// DELETE PRODUCT
+// ============================================
 export const deleteDynamicProduct = async (req, res) => {
   const { category, id } = req.params;
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  let transactionStarted = false;
 
   try {
     const categoryDoc = await Category.findOne({ slug: category });
-    if (!categoryDoc) throw new Error("Category không tồn tại");
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
 
     const ProductModel = getOrCreateModel(categoryDoc.name);
     const VariantModel = getOrCreateModel(categoryDoc.name, true);
 
-    const product = await ProductModel.findById(id).session(session);
-    if (!product) throw new Error("Không tìm thấy sản phẩm");
+    const product = await ProductModel.findById(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sản phẩm",
+      });
+    }
+
+    session = await mongoose.startSession();
+    session.startTransaction();
+    transactionStarted = true;
 
     await VariantModel.deleteMany({ productId: product._id }, { session });
     await product.deleteOne({ session });
 
     await session.commitTransaction();
-    res.json({ success: true, message: "Xóa thành công" });
+    transactionStarted = false;
+
+    res.json({
+      success: true,
+      message: "Xóa thành công",
+    });
   } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ success: false, message: error.message });
+    if (session && transactionStarted) {
+      try {
+        await session.abortTransaction();
+      } catch (abortError) {
+        console.error("Error aborting transaction:", abortError.message);
+      }
+    }
+
+    console.error("DELETE ERROR:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   } finally {
-    session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
