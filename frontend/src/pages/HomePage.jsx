@@ -61,35 +61,27 @@ const HomePage = () => {
   // FETCH ALL PRODUCTS
   // ============================================
   const fetchAllProducts = useCallback(async () => {
-    const allProductsList = [];
+  try {
+    console.log("📥 Fetching all products...");
+    
+    // ✅ USE NEW AGGREGATOR API
+    const response = await fetch("/api/products-aggregator/all?limit=1000");
+    const data = await response.json();
 
-    try {
-      await Promise.all(
-        Object.keys(API_MAP).map(async (category) => {
-          const api = API_MAP[category];
-          if (!api?.getAll) return;
+    console.log("📦 Response:", data);
 
-          try {
-            const response = await api.getAll({ limit: 100 });
-            const products =
-              response.data?.data?.products || response.data || [];
-            const productsWithCategory = products.map((p) => ({
-              ...p,
-              category,
-            }));
-            allProductsList.push(...productsWithCategory);
-          } catch (error) {
-            console.error(`Error fetching ${category}:`, error);
-          }
-        })
-      );
-
-      setAllProducts(allProductsList);
-    } catch (err) {
-      console.error("Error loading products:", err);
-      toast.error("Không thể tải dữ liệu sản phẩm");
+    if (data.success) {
+      console.log("✅ Products loaded:", data.data.products.length);
+      setAllProducts(data.data.products);
+    } else {
+      console.error("❌ Failed to load products:", data.message);
+      toast.error(data.message || "Không thể tải sản phẩm");
     }
-  }, []);
+  } catch (err) {
+    console.error("❌ Error loading products:", err);
+    toast.error("Không thể tải dữ liệu sản phẩm");
+  }
+}, []);
 
   // ============================================
   // INITIAL LOAD

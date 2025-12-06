@@ -36,6 +36,7 @@ import shortVideoRoutes from "./routes/shortVideoRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import customSpecRoutes from "./routes/customSpecRoutes.js";
 import dynamicProductRoutes from "./routes/dynamicProductRoutes.js";
+import productAggregatorRoutes from "./routes/productAggregatorRoutes.js";
 
 dotenv.config();
 
@@ -168,6 +169,7 @@ app.use("/api/custom-specs", customSpecRoutes);
 // ✅ SHORT VIDEOS ROUTE
 app.use("/api/short-videos", shortVideoRoutes);
 app.use("/api/categories/:category/products", dynamicProductRoutes);
+app.use("/api/products-aggregator", productAggregatorRoutes);
 
 // ================================
 // 🔹 Health Check Endpoint

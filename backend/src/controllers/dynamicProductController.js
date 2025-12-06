@@ -18,68 +18,95 @@ const createSlug = (str) =>
     .replace(/-+$/, "");
 
 // ============================================
-// DYNAMIC PRODUCT SCHEMA
+// CREATE DYNAMIC PRODUCT SCHEMA - NO REF
 // ============================================
 const createDynamicProductSchema = (category) => {
   return new mongoose.Schema(
     {
       name: { type: String, required: true, trim: true },
       model: { type: String, required: true, trim: true },
-      baseSlug: { type: String, required: true, unique: true, sparse: true },
+      baseSlug: { type: String, required: true, sparse: true },
       slug: { type: String, sparse: true },
       description: { type: String, trim: true, default: "" },
-
       featuredImages: [{ type: String, trim: true }],
       videoUrl: { type: String, trim: true, default: "" },
-
       specifications: { type: mongoose.Schema.Types.Mixed, default: {} },
-
-      variants: [
-        { type: mongoose.Schema.Types.ObjectId, ref: `${category}Variant` },
-      ],
-
-      condition: {
-        type: String,
-        enum: ["NEW", "LIKE_NEW"],
-        default: "NEW",
-      },
+      
+      // ✅ DON'T USE REF - just store ObjectIds
+      variants: [{ type: mongoose.Schema.Types.ObjectId }],
+      
+      condition: { type: String, default: "NEW" },
       brand: { type: String, default: "Apple", trim: true },
-      productType: { type: String, required: true, default: category },
-      category: { type: String, required: true, default: category },
-
-      status: {
-        type: String,
-        enum: ["AVAILABLE", "OUT_OF_STOCK", "DISCONTINUED", "PRE_ORDER"],
-        default: "AVAILABLE",
-      },
-
-      installmentBadge: {
-        type: String,
-        enum: ["NONE", "Trả góp 0%", "Trả góp 0%, trả trước 0đ"],
-        default: "NONE",
-      },
-
-      createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-      },
+      productType: { type: String, required: true },
+      category: { type: String, required: true },
+      status: { type: String, default: "AVAILABLE" },
+      installmentBadge: { type: String, default: "NONE" },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       averageRating: { type: Number, default: 0, min: 0, max: 5 },
       totalReviews: { type: Number, default: 0, min: 0 },
       salesCount: { type: Number, default: 0, min: 0 },
     },
-    { timestamps: true }
+    { 
+      timestamps: true, 
+      strict: false, // ✅ Allow any fields
+      collection: undefined // Will be set explicitly
+    }
   );
 };
 
+
+// ============================================
+// HELPER: Get all collections from MongoDB
+// ============================================
+const getAllCollections = async () => {
+  try {
+    const collections = await mongoose.connection.db
+      .listCollections()
+      .toArray();
+    return collections.map((c) => c.name);
+  } catch (error) {
+    console.error("Error listing collections:", error);
+    return [];
+  }
+};
+
+// ============================================
+// HELPER: Find matching collection for category
+// ============================================
+const findCollectionForCategory = async (categoryName) => {
+  const allCollections = await getAllCollections();
+  const categoryLower = categoryName.toLowerCase();
+
+  console.log(`🔍 Looking for collection for category: ${categoryName}`);
+  console.log(`📂 Available collections:`, allCollections);
+
+  // Try different patterns for product collection
+  const patterns = [
+    categoryName, // Vision
+    categoryLower, // vision
+    `${categoryLower}s`, // visions
+    `${categoryName}s`, // Visions
+  ];
+
+  for (const pattern of patterns) {
+    if (allCollections.includes(pattern)) {
+      console.log(`✅ Found collection: ${pattern}`);
+      return pattern;
+    }
+  }
+
+  console.warn(`⚠️ No collection found for ${categoryName}`);
+  return null;
+};
+
+
+// ============================================
+// CREATE DYNAMIC VARIANT SCHEMA
+// ============================================
 const createDynamicVariantSchema = (category) => {
   return new mongoose.Schema(
     {
-      productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: category,
-        required: true,
-      },
+      productId: { type: mongoose.Schema.Types.ObjectId, required: true },
       color: { type: String, required: true, trim: true },
       variantName: { type: String, required: true, trim: true },
       originalPrice: { type: Number, required: true, min: 0 },
@@ -89,28 +116,58 @@ const createDynamicVariantSchema = (category) => {
       sku: { type: String, required: true, unique: true },
       slug: { type: String, required: true, sparse: true },
       salesCount: { type: Number, default: 0, min: 0 },
-
-      // Dynamic fields
       specs: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
-    { timestamps: true }
+    { 
+      timestamps: true,
+      strict: false,
+      collection: undefined
+    }
   );
 };
 
 // ============================================
 // GET OR CREATE MODEL
 // ============================================
-const getOrCreateModel = (category, isVariant = false) => {
+const getOrCreateModel = async (category, isVariant = false) => {
   const modelName = isVariant ? `${category}Variant` : category;
 
   try {
     return mongoose.model(modelName);
   } catch {
-    const schema = isVariant
-      ? createDynamicVariantSchema(category)
-      : createDynamicProductSchema(category);
+    try {
+      console.log(`🔨 Creating dynamic model: ${modelName}`);
 
-    return mongoose.model(modelName, schema);
+      // Find actual collection name from MongoDB
+      const baseCollection = await findCollectionForCategory(category);
+
+      if (!baseCollection) {
+        console.error(`❌ No collection found for ${category}`);
+        return null;
+      }
+
+      // Determine variant collection name
+      const collectionName = isVariant
+        ? `${baseCollection.replace(/s$/, "")}variants` // visions → visionvariants
+        : baseCollection;
+
+      console.log(`📦 Using collection: ${collectionName}`);
+
+      const schema = isVariant
+        ? createDynamicVariantSchema(category)
+        : createDynamicProductSchema(category);
+
+      // Add strict: false to allow any fields
+      schema.set("strict", false);
+
+      const model = mongoose.model(modelName, schema, collectionName);
+      console.log(`✅ Model registered: ${modelName} → ${collectionName}`);
+
+      return model;
+    } catch (error) {
+      console.error(`❌ Failed to create model ${modelName}:`, error);
+      return null;
+    }
   }
 };
 
@@ -303,12 +360,14 @@ export const createDynamicProduct = async (req, res) => {
 };
 
 // ============================================
-// FIND ALL PRODUCTS
+// FIND ALL PRODUCTS - ✅ ENHANCED LOGGING
 // ============================================
 export const findAllDynamicProducts = async (req, res) => {
   try {
     const { category } = req.params;
     const { page = 1, limit = 12, search, status } = req.query;
+
+    console.log("🔵 findAllDynamicProducts:", { category, page, limit });
 
     const categoryDoc = await Category.findOne({ slug: category });
     if (!categoryDoc) {
@@ -318,9 +377,20 @@ export const findAllDynamicProducts = async (req, res) => {
       });
     }
 
-    const ProductModel = getOrCreateModel(categoryDoc.name);
-    const query = {};
+    const ProductModel = await getOrCreateModel(categoryDoc.name);
+    const VariantModel = await getOrCreateModel(categoryDoc.name, true);
+    
+    if (!ProductModel || !VariantModel) {
+      return res.status(500).json({
+        success: false,
+        message: "Không thể tạo model",
+        data: { products: [], total: 0, totalPages: 0, currentPage: 1 },
+      });
+    }
 
+    console.log("📦 Models:", ProductModel.modelName, VariantModel.modelName);
+
+    const query = {};
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -332,15 +402,43 @@ export const findAllDynamicProducts = async (req, res) => {
     const skip = (page - 1) * limit;
     const limitNum = parseInt(limit);
 
+    // ✅ FETCH PRODUCTS WITHOUT POPULATE
     const [products, count] = await Promise.all([
       ProductModel.find(query)
-        .populate("variants")
-        .populate("createdBy", "fullName")
         .skip(skip)
         .limit(limitNum)
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .lean(),
       ProductModel.countDocuments(query),
     ]);
+
+    console.log("✅ Raw products found:", products.length);
+
+    // ✅ MANUALLY POPULATE VARIANTS
+    for (const product of products) {
+      if (product.variants && product.variants.length > 0) {
+        const variantIds = product.variants;
+        console.log(`🔍 Fetching variants for ${product.name}:`, variantIds);
+        
+        const variants = await VariantModel.find({
+          _id: { $in: variantIds }
+        }).lean();
+        
+        console.log(`✅ Found ${variants.length} variants`);
+        product.variants = variants;
+      }
+    }
+
+    // ✅ POPULATE CREATED BY
+    const User = mongoose.model('User');
+    for (const product of products) {
+      if (product.createdBy) {
+        const user = await User.findById(product.createdBy).select('fullName email').lean();
+        product.createdBy = user;
+      }
+    }
+
+    console.log("✅ Final products with variants:", products.length);
 
     res.json({
       success: true,
@@ -352,7 +450,7 @@ export const findAllDynamicProducts = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("FIND ALL ERROR:", error);
+    console.error("❌ FIND ALL ERROR:", error);
     res.status(500).json({
       success: false,
       message: error.message,

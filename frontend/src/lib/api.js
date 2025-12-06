@@ -381,6 +381,12 @@ export const customSpecAPI = {
   resetToDefault: (category) => api.post(`/custom-specs/${category}/reset`),
 };
 
+export const productsAggregatorAPI = {
+  getAll: (params) => api.get("/products-aggregator/all", { params }),
+  getByCategory: (category, params) =>
+    api.get(`/products-aggregator/category/${category}`, { params }),
+};
+
 // ============================================
 // EXPORT DEFAULT
 // ============================================
