@@ -170,7 +170,6 @@ app.use("/api/custom-specs", customSpecRoutes);
 app.use("/api/short-videos", shortVideoRoutes);
 app.use("/api/categories/:category/products", dynamicProductRoutes);
 app.use("/api/products-aggregator", productAggregatorRoutes);
-
 // ================================
 // 🔹 Health Check Endpoint
 // ================================

@@ -266,6 +266,7 @@ const ProductCard = ({
   };
 
   const handleCardClick = () => {
+    // ✅ FIXED: Dynamic category mapping
     const categoryPath = {
       iPhone: "dien-thoai",
       iPad: "may-tinh-bang",
@@ -275,19 +276,25 @@ const ProductCard = ({
       Accessories: "phu-kien",
     }[product.category];
 
-    if (!categoryPath) {
+    // ✅ If not a fixed category, use categorySlug from API
+    const finalPath =
+      categoryPath || product.categorySlug || product.category.toLowerCase();
+
+    if (!finalPath) {
       console.warn("Unknown category:", product.category);
+      toast.error("Không thể xem chi tiết sản phẩm");
       return;
     }
 
+    // Navigate to product detail
     if (selectedVariant?.sku && selectedVariant?.slug) {
-      const url = `/${categoryPath}/${selectedVariant.slug}?sku=${selectedVariant.sku}`;
+      const url = `/${finalPath}/${selectedVariant.slug}?sku=${selectedVariant.sku}`;
       navigate(url);
       return;
     }
 
     if (product.baseSlug) {
-      const url = `/${categoryPath}/${product.baseSlug}`;
+      const url = `/${finalPath}/${product.baseSlug}`;
       navigate(url);
       return;
     }
@@ -449,7 +456,10 @@ const ProductCard = ({
           </div>
 
           <div className="mt-3">
-            <StarRating rating={product.averageRating} reviewCount={product.totalReviews} />
+            <StarRating
+              rating={product.averageRating}
+              reviewCount={product.totalReviews}
+            />
             <div className="mt-2 border-b border-gray-200"></div>
           </div>
 

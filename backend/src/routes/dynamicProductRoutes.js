@@ -68,5 +68,6 @@ router.use(restrictTo("ADMIN", "WAREHOUSE_STAFF"));
 router.post("/", controller.createDynamicProduct);
 router.put("/:id", controller.updateDynamicProduct);
 router.delete("/:id", controller.deleteDynamicProduct);
+router.get("/:id", controller.getDynamicProductDetail);
 
 export default router;

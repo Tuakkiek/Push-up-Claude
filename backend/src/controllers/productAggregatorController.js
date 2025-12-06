@@ -1,25 +1,27 @@
-// ============================================
-// FILE: backend/src/controllers/productAggregatorController.js
-// ✅ AGGREGATOR - Fetch products from ALL categories (fixed + dynamic)
-// ============================================
-
+// backend/src/controllers/productAggregatorController.js
 import mongoose from "mongoose";
 import Category from "../models/Category.js";
+import IPhone, { IPhoneVariant } from "../models/IPhone.js";
+import IPad, { IPadVariant } from "../models/IPad.js";
+import Mac, { MacVariant } from "../models/Mac.js";
+import AirPods, { AirPodsVariant } from "../models/AirPods.js";
+import AppleWatch, { AppleWatchVariant } from "../models/AppleWatch.js";
+import Accessory, { AccessoryVariant } from "../models/Accessory.js";
 
 // ============================================
 // FIXED CATEGORIES MAPPING
 // ============================================
-const FIXED_CATEGORIES = [
-  "iPhone",
-  "iPad",
-  "Mac",
-  "AirPods",
-  "AppleWatch",
-  "Accessories",
-];
+const FIXED_MODELS = {
+  iPhone: { Product: IPhone, Variant: IPhoneVariant },
+  iPad: { Product: IPad, Variant: IPadVariant },
+  Mac: { Product: Mac, Variant: MacVariant },
+  AirPods: { Product: AirPods, Variant: AirPodsVariant },
+  AppleWatch: { Product: AppleWatch, Variant: AppleWatchVariant },
+  Accessories: { Product: Accessory, Variant: AccessoryVariant },
+};
 
 // ============================================
-// HELPER: Get all collections from MongoDB
+// HELPER: Get all MongoDB collections
 // ============================================
 const getAllCollections = async () => {
   try {
@@ -34,26 +36,22 @@ const getAllCollections = async () => {
 };
 
 // ============================================
-// HELPER: Find matching collection for category
+// HELPER: Find collection for category
 // ============================================
 const findCollectionForCategory = async (categoryName) => {
   const allCollections = await getAllCollections();
   const categoryLower = categoryName.toLowerCase();
 
-  console.log(`🔍 Looking for collection for category: ${categoryName}`);
-  console.log(`📂 Available collections:`, allCollections);
-
-  // Try different patterns
   const patterns = [
-    categoryName, // Vision
-    categoryLower, // vision
-    `${categoryLower}s`, // visions
-    `${categoryName}s`, // Visions
+    categoryName,
+    categoryLower,
+    `${categoryLower}s`,
+    `${categoryName}s`,
   ];
 
   for (const pattern of patterns) {
     if (allCollections.includes(pattern)) {
-      console.log(`✅ Found collection: ${pattern}`);
+      console.log(`✅ Found collection: ${pattern} for ${categoryName}`);
       return pattern;
     }
   }
@@ -63,96 +61,143 @@ const findCollectionForCategory = async (categoryName) => {
 };
 
 // ============================================
-// HELPER: Get or create model dynamically
+// HELPER: Create dynamic schema
 // ============================================
-const getModelForCategory = async (categoryName) => {
+const createDynamicSchema = (isVariant = false) => {
+  if (isVariant) {
+    return new mongoose.Schema(
+      {
+        productId: { type: mongoose.Schema.Types.ObjectId, required: true },
+        color: { type: String, required: true },
+        variantName: { type: String, required: true },
+        originalPrice: { type: Number, required: true },
+        price: { type: Number, required: true },
+        stock: { type: Number, required: true, default: 0 },
+        images: [{ type: String }],
+        sku: { type: String, required: true, unique: true },
+        slug: { type: String, required: true },
+        salesCount: { type: Number, default: 0 },
+      },
+      { timestamps: true, strict: false }
+    );
+  }
+
+  return new mongoose.Schema(
+    {
+      name: { type: String, required: true },
+      model: { type: String, required: true },
+      slug: { type: String, required: true },
+      baseSlug: { type: String, required: true },
+      description: { type: String, default: "" },
+      specifications: { type: mongoose.Schema.Types.Mixed, default: {} },
+      variants: [{ type: mongoose.Schema.Types.ObjectId }],
+      condition: { type: String, default: "NEW" },
+      brand: { type: String, default: "Apple" },
+      category: { type: String, required: true },
+      productType: { type: String, required: true },
+      status: { type: String, default: "AVAILABLE" },
+      installmentBadge: { type: String, default: "NONE" },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      averageRating: { type: Number, default: 0 },
+      totalReviews: { type: Number, default: 0 },
+      salesCount: { type: Number, default: 0 },
+      featuredImages: [{ type: String }],
+      videoUrl: { type: String, default: "" },
+    },
+    { timestamps: true, strict: false }
+  );
+};
+
+// ============================================
+// HELPER: Get or Create Models for Category
+// ============================================
+const getOrCreateModels = async (categoryName) => {
+  console.log(`🔍 Getting models for: ${categoryName}`);
+
+  // Check if fixed category
+  if (FIXED_MODELS[categoryName]) {
+    console.log(`✅ Using FIXED models for ${categoryName}`);
+    return FIXED_MODELS[categoryName];
+  }
+
+  // Dynamic category
+  const productModelName = categoryName;
+  const variantModelName = `${categoryName}Variant`;
+
   try {
-    // Try to get existing model
-    return mongoose.model(categoryName);
+    // Try to get existing models
+    const ProductModel = mongoose.model(productModelName);
+    const VariantModel = mongoose.model(variantModelName);
+    console.log(
+      `✅ Found existing models: ${productModelName}, ${variantModelName}`
+    );
+    return { Product: ProductModel, Variant: VariantModel };
   } catch {
-    // Model doesn't exist, create it
-    try {
-      console.log(`🔨 Creating dynamic model for: ${categoryName}`);
+    // Models don't exist, create them
+    console.log(`🔨 Creating dynamic models for ${categoryName}`);
 
-      // Find actual collection name
-      const collectionName = await findCollectionForCategory(categoryName);
-
-      if (!collectionName) {
-        console.error(`❌ No collection found for ${categoryName}`);
-        return null;
-      }
-
-      // Create schema
-      const schema = new mongoose.Schema(
-        {
-          name: { type: String, required: true, trim: true },
-          model: { type: String, required: true, trim: true },
-          baseSlug: { type: String, required: true, sparse: true },
-          slug: { type: String, sparse: true },
-          description: { type: String, trim: true, default: "" },
-          featuredImages: [{ type: String, trim: true }],
-          videoUrl: { type: String, trim: true, default: "" },
-          specifications: { type: mongoose.Schema.Types.Mixed, default: {} },
-          variants: [{ type: mongoose.Schema.Types.ObjectId }],
-          condition: { type: String, default: "NEW" },
-          brand: { type: String, default: "Apple", trim: true },
-          productType: { type: String, required: true },
-          category: { type: String, required: true },
-          status: { type: String, default: "AVAILABLE" },
-          installmentBadge: { type: String, default: "NONE" },
-          createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-          averageRating: { type: Number, default: 0, min: 0, max: 5 },
-          totalReviews: { type: Number, default: 0, min: 0 },
-          salesCount: { type: Number, default: 0, min: 0 },
-        },
-        { timestamps: true, strict: false } // ✅ strict: false allows any fields
-      );
-
-      // Create model with explicit collection name
-      const model = mongoose.model(categoryName, schema, collectionName);
-      console.log(
-        `✅ Model created: ${categoryName} → Collection: ${collectionName}`
-      );
-
-      return model;
-    } catch (error) {
-      console.error(`❌ Failed to create model for ${categoryName}:`, error);
+    const productCollection = await findCollectionForCategory(categoryName);
+    if (!productCollection) {
+      console.error(`❌ No collection found for ${categoryName}`);
       return null;
     }
+
+    const variantCollection = `${productCollection.replace(/s$/, "")}variants`;
+
+    const productSchema = createDynamicSchema(false);
+    const variantSchema = createDynamicSchema(true);
+
+    const ProductModel = mongoose.model(
+      productModelName,
+      productSchema,
+      productCollection
+    );
+    const VariantModel = mongoose.model(
+      variantModelName,
+      variantSchema,
+      variantCollection
+    );
+
+    console.log(
+      `✅ Created models: ${productModelName} → ${productCollection}`
+    );
+    console.log(
+      `✅ Created models: ${variantModelName} → ${variantCollection}`
+    );
+
+    return { Product: ProductModel, Variant: VariantModel };
   }
 };
 
 // ============================================
-// GET ALL PRODUCTS FROM ALL CATEGORIES
+// GET ALL PRODUCTS (ALL CATEGORIES)
 // ============================================
 export const getAllProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 100, search, status } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const limitNum = parseInt(limit);
+    const { page = 1, limit = 1000, search, status } = req.query;
 
-    console.log("📥 Fetching all products...");
+    console.log("🔵 getAllProducts:", { page, limit, search, status });
 
-    // 1. Fetch all active categories
-    const categories = await Category.find({ active: true });
+    // Get all active categories
+    const categories = await Category.find({ active: true }).lean();
     console.log(
-      "📂 Found categories:",
+      `📦 Found ${categories.length} active categories:`,
       categories.map((c) => c.name)
     );
 
-    let allProducts = [];
+    const allProducts = [];
+    const User = mongoose.model("User");
 
-    // 2. Loop through each category and fetch products
+    // Fetch products from each category
     for (const category of categories) {
       try {
-        const Model = await getModelForCategory(category.name);
+        const models = await getOrCreateModels(category.name);
 
-        if (!Model) {
-          console.warn(`⚠️ No model found for category: ${category.name}`);
+        if (!models || !models.Product || !models.Variant) {
+          console.warn(`⚠️ No models for ${category.name}`);
           continue;
         }
 
-        // Build query
         const query = {};
         if (search) {
           query.$or = [
@@ -160,54 +205,69 @@ export const getAllProducts = async (req, res) => {
             { model: { $regex: search, $options: "i" } },
           ];
         }
-        if (status) query.status = status;
+        if (status) {
+          query.status = status;
+        }
 
-        // Fetch products
-        const products = await Model.find(query)
-          .populate("variants")
-          .populate("createdBy", "fullName email")
+        const products = await models.Product.find(query)
+          .sort({ createdAt: -1 })
           .lean();
 
-        console.log(`✅ ${category.name}: ${products.length} products`);
+        console.log(`📦 ${category.name}: Found ${products.length} products`);
 
-        // Add category info to each product
-        allProducts.push(
-          ...products.map((p) => ({
-            ...p,
-            category: category.name,
-            categorySlug: category.slug,
-          }))
-        );
+        // Populate variants and user for each product
+        for (const product of products) {
+          // Populate variants
+          if (product.variants && product.variants.length > 0) {
+            const variants = await models.Variant.find({
+              _id: { $in: product.variants },
+            }).lean();
+            product.variants = variants;
+            console.log(`  ✅ ${product.name}: ${variants.length} variants`);
+          } else {
+            product.variants = [];
+          }
+
+          // Populate user
+          if (product.createdBy) {
+            const user = await User.findById(product.createdBy)
+              .select("fullName email")
+              .lean();
+            product.createdBy = user;
+          }
+
+          // Add category info
+          product.category = category.name;
+          product.categorySlug = category.slug;
+        }
+
+        allProducts.push(...products);
       } catch (error) {
-        console.error(`❌ Error fetching ${category.name}:`, error.message);
+        console.error(`❌ Error loading ${category.name}:`, error.message);
       }
     }
 
-    // 3. Sort by creation date (newest first)
-    allProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    // 4. Pagination
+    // Apply pagination
     const total = allProducts.length;
-    const paginatedProducts = allProducts.slice(skip, skip + limitNum);
+    const skip = (page - 1) * limit;
+    const paginatedProducts = allProducts.slice(skip, skip + parseInt(limit));
 
-    console.log(
-      `📊 Total products: ${total}, Returning: ${paginatedProducts.length}`
-    );
+    console.log(`✅ Total: ${total}, Returning: ${paginatedProducts.length}`);
 
     res.json({
       success: true,
       data: {
         products: paginatedProducts,
         total,
-        totalPages: Math.ceil(total / limitNum),
+        totalPages: Math.ceil(total / limit),
         currentPage: parseInt(page),
       },
     });
   } catch (error) {
-    console.error("❌ GET ALL PRODUCTS ERROR:", error);
+    console.error("❌ getAllProducts error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Lỗi server",
+      message: error.message,
       data: {
         products: [],
         total: 0,
@@ -219,34 +279,41 @@ export const getAllProducts = async (req, res) => {
 };
 
 // ============================================
-// GET PRODUCTS BY CATEGORY NAME
+// GET PRODUCTS BY CATEGORY
 // ============================================
 export const getProductsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const { page = 1, limit = 12, search, status } = req.query;
 
-    console.log(`📥 Fetching products for category: ${category}`);
+    console.log("🔵 getProductsByCategory:", { category, page, limit });
 
-    // 1. Check if category exists
-    const categoryDoc = await Category.findOne({ name: category });
+    // Find category by slug or name
+    const categoryDoc = await Category.findOne({
+      $or: [{ slug: category }, { name: category }],
+      active: true,
+    });
+
     if (!categoryDoc) {
       return res.status(404).json({
         success: false,
-        message: `Category "${category}" không tồn tại`,
+        message: "Category không tồn tại",
       });
     }
 
-    // 2. Get model
-    const Model = await getModelForCategory(category);
-    if (!Model) {
+    console.log(
+      `✅ Found category: ${categoryDoc.name} (slug: ${categoryDoc.slug})`
+    );
+
+    const models = await getOrCreateModels(categoryDoc.name);
+
+    if (!models || !models.Product || !models.Variant) {
       return res.status(404).json({
         success: false,
-        message: `Model cho category "${category}" không tồn tại`,
+        message: "Không tìm thấy model cho category này",
       });
     }
 
-    // 3. Build query
     const query = {};
     if (search) {
       query.$or = [
@@ -254,43 +321,65 @@ export const getProductsByCategory = async (req, res) => {
         { model: { $regex: search, $options: "i" } },
       ];
     }
-    if (status) query.status = status;
+    if (status) {
+      query.status = status;
+    }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const limitNum = parseInt(limit);
+    const skip = (page - 1) * limit;
 
-    // 4. Fetch products
     const [products, total] = await Promise.all([
-      Model.find(query)
-        .populate("variants")
-        .populate("createdBy", "fullName email")
-        .skip(skip)
-        .limit(limitNum)
+      models.Product.find(query)
         .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
         .lean(),
-      Model.countDocuments(query),
+      models.Product.countDocuments(query),
     ]);
 
-    console.log(`✅ Found ${total} products in ${category}`);
+    console.log(`📦 Found ${products.length}/${total} products`);
+
+    // Populate variants and user
+    const User = mongoose.model("User");
+
+    for (const product of products) {
+      // Populate variants
+      if (product.variants && product.variants.length > 0) {
+        const variants = await models.Variant.find({
+          _id: { $in: product.variants },
+        }).lean();
+        product.variants = variants;
+        console.log(`  ✅ ${product.name}: ${variants.length} variants`);
+      } else {
+        product.variants = [];
+      }
+
+      // Populate user
+      if (product.createdBy) {
+        const user = await User.findById(product.createdBy)
+          .select("fullName email")
+          .lean();
+        product.createdBy = user;
+      }
+    }
+
+    console.log(
+      `✅ ${categoryDoc.name}: Returning ${products.length} products with variants`
+    );
 
     res.json({
       success: true,
       data: {
-        products: products.map((p) => ({
-          ...p,
-          category: category,
-          categorySlug: categoryDoc.slug,
-        })),
+        products,
         total,
-        totalPages: Math.ceil(total / limitNum),
+        totalPages: Math.ceil(total / limit),
         currentPage: parseInt(page),
       },
     });
   } catch (error) {
-    console.error("❌ GET PRODUCTS BY CATEGORY ERROR:", error);
+    console.error("❌ getProductsByCategory error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Lỗi server",
+      message: error.message,
       data: {
         products: [],
         total: 0,
@@ -301,139 +390,7 @@ export const getProductsByCategory = async (req, res) => {
   }
 };
 
-// ============================================
-// SEARCH PRODUCTS ACROSS ALL CATEGORIES
-// ============================================
-export const searchProducts = async (req, res) => {
-  try {
-    const { q, limit = 20 } = req.query;
-
-    if (!q || q.trim().length < 2) {
-      return res.json({
-        success: true,
-        data: {
-          products: [],
-          total: 0,
-        },
-      });
-    }
-
-    console.log(`🔍 Searching for: "${q}"`);
-
-    const categories = await Category.find({ active: true });
-    let allResults = [];
-
-    for (const category of categories) {
-      try {
-        const Model = await getModelForCategory(category.name);
-        if (!Model) continue;
-
-        const products = await Model.find({
-          $or: [
-            { name: { $regex: q, $options: "i" } },
-            { model: { $regex: q, $options: "i" } },
-          ],
-        })
-          .populate("variants")
-          .limit(parseInt(limit))
-          .lean();
-
-        allResults.push(
-          ...products.map((p) => ({
-            ...p,
-            category: category.name,
-            categorySlug: category.slug,
-          }))
-        );
-      } catch (error) {
-        console.error(`Error searching ${category.name}:`, error.message);
-      }
-    }
-
-    // Sort by relevance (exact match first, then alphabetical)
-    allResults.sort((a, b) => {
-      const aNameMatch = a.name.toLowerCase().includes(q.toLowerCase());
-      const bNameMatch = b.name.toLowerCase().includes(q.toLowerCase());
-      if (aNameMatch && !bNameMatch) return -1;
-      if (!aNameMatch && bNameMatch) return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    console.log(`✅ Found ${allResults.length} matching products`);
-
-    res.json({
-      success: true,
-      data: {
-        products: allResults.slice(0, parseInt(limit)),
-        total: allResults.length,
-      },
-    });
-  } catch (error) {
-    console.error("❌ SEARCH ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi tìm kiếm",
-      data: {
-        products: [],
-        total: 0,
-      },
-    });
-  }
-};
-
-// ============================================
-// GET PRODUCT STATISTICS
-// ============================================
-export const getProductStats = async (req, res) => {
-  try {
-    const categories = await Category.find({ active: true });
-    const stats = [];
-
-    for (const category of categories) {
-      try {
-        const Model = await getModelForCategory(category.name);
-        if (!Model) continue;
-
-        const [total, available, outOfStock] = await Promise.all([
-          Model.countDocuments(),
-          Model.countDocuments({ status: "AVAILABLE" }),
-          Model.countDocuments({ status: "OUT_OF_STOCK" }),
-        ]);
-
-        stats.push({
-          category: category.name,
-          slug: category.slug,
-          total,
-          available,
-          outOfStock,
-        });
-      } catch (error) {
-        console.error(
-          `Error getting stats for ${category.name}:`,
-          error.message
-        );
-      }
-    }
-
-    res.json({
-      success: true,
-      data: { stats },
-    });
-  } catch (error) {
-    console.error("❌ GET STATS ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi lấy thống kê",
-    });
-  }
-};
-
-// ============================================
-// EXPORT
-// ============================================
 export default {
   getAllProducts,
   getProductsByCategory,
-  searchProducts,
-  getProductStats,
 };

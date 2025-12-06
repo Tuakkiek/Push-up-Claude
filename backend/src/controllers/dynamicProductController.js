@@ -362,6 +362,9 @@ export const createDynamicProduct = async (req, res) => {
 // ============================================
 // FIND ALL PRODUCTS - ✅ ENHANCED LOGGING
 // ============================================
+// ============================================
+// FIND ALL PRODUCTS - ✅ COMPLETELY FIXED
+// ============================================
 export const findAllDynamicProducts = async (req, res) => {
   try {
     const { category } = req.params;
@@ -389,6 +392,7 @@ export const findAllDynamicProducts = async (req, res) => {
     }
 
     console.log("📦 Models:", ProductModel.modelName, VariantModel.modelName);
+    console.log("📦 Collections:", ProductModel.collection.name, VariantModel.collection.name);
 
     const query = {};
     if (search) {
@@ -402,7 +406,7 @@ export const findAllDynamicProducts = async (req, res) => {
     const skip = (page - 1) * limit;
     const limitNum = parseInt(limit);
 
-    // ✅ FETCH PRODUCTS WITHOUT POPULATE
+    // ✅ FETCH PRODUCTS
     const [products, count] = await Promise.all([
       ProductModel.find(query)
         .skip(skip)
@@ -414,26 +418,27 @@ export const findAllDynamicProducts = async (req, res) => {
 
     console.log("✅ Raw products found:", products.length);
 
-    // ✅ MANUALLY POPULATE VARIANTS
+    // ✅ MANUALLY POPULATE VARIANTS & USER
+    const User = mongoose.model('User');
+    
     for (const product of products) {
+      // Populate variants
       if (product.variants && product.variants.length > 0) {
-        const variantIds = product.variants;
-        console.log(`🔍 Fetching variants for ${product.name}:`, variantIds);
-        
         const variants = await VariantModel.find({
-          _id: { $in: variantIds }
+          _id: { $in: product.variants }
         }).lean();
         
-        console.log(`✅ Found ${variants.length} variants`);
+        console.log(`✅ ${product.name}: ${variants.length} variants`);
         product.variants = variants;
+      } else {
+        product.variants = [];
       }
-    }
 
-    // ✅ POPULATE CREATED BY
-    const User = mongoose.model('User');
-    for (const product of products) {
+      // Populate createdBy
       if (product.createdBy) {
-        const user = await User.findById(product.createdBy).select('fullName email').lean();
+        const user = await User.findById(product.createdBy)
+          .select('fullName email')
+          .lean();
         product.createdBy = user;
       }
     }
@@ -463,7 +468,6 @@ export const findAllDynamicProducts = async (req, res) => {
     });
   }
 };
-
 // ============================================
 // GET PRODUCT DETAIL
 // ============================================

@@ -31,21 +31,50 @@ import { ReviewsTab } from "@/components/product/ReviewsTab";
 import SimilarProducts from "@/components/product/SimilarProducts";
 import { Button } from "@/components/ui/button";
 
+const getDynamicCategoryAPI = (categorySlug) => {
+  const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+
+  const getToken = () => {
+    const authStorage = localStorage.getItem("auth-storage");
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage);
+        return state?.token;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  return {
+    get: async (slug, options = {}) => {
+      const { params = {} } = options;
+      const queryString = new URLSearchParams(params).toString();
+      const url = `${BASE_URL}/categories/${categorySlug}/products/${slug}${
+        queryString ? `?${queryString}` : ""
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch product");
+      return response.json();
+    },
+  };
+};
+
 const CATEGORY_MAP = {
   "dien-thoai": { model: "iPhone", api: iPhoneAPI, category: "iPhone" },
   "may-tinh-bang": { model: "iPad", api: iPadAPI, category: "iPad" },
   macbook: { model: "Mac", api: macAPI, category: "Mac" },
   "tai-nghe": { model: "AirPods", api: airPodsAPI, category: "AirPods" },
-  "apple-watch": {
-    model: "AppleWatch",
-    api: appleWatchAPI,
-    category: "AppleWatch",
-  },
-  "phu-kien": {
-    model: "Accessory",
-    api: accessoryAPI,
-    category: "Accessory",
-  },
+  "apple-watch": { model: "AppleWatch", api: appleWatchAPI, category: "AppleWatch" },
+  "phu-kien": { model: "Accessory", api: accessoryAPI, category: "Accessory" },
 };
 
 const VARIANT_KEY_FIELD = {
@@ -134,60 +163,70 @@ const ProductDetailPage = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchProductData = async () => {
-      if (!categoryInfo || !fullSlug) {
-        setError("Không tìm thấy sản phẩm");
-        setIsLoading(false);
-        return;
+useEffect(() => {
+  const fetchProductData = async () => {
+    if (!fullSlug) {
+      setError("Không tìm thấy sản phẩm");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      let categoryInfo = CATEGORY_MAP[categorySlug];
+      
+      // ✅ If not fixed category, create dynamic API
+      if (!categoryInfo) {
+        console.log(`🔄 Using dynamic API for: ${categorySlug}`);
+        categoryInfo = {
+          model: categorySlug.charAt(0).toUpperCase() + categorySlug.slice(1),
+          api: getDynamicCategoryAPI(categorySlug),
+          category: categorySlug.charAt(0).toUpperCase() + categorySlug.slice(1),
+        };
       }
 
-      setIsLoading(true);
-      setError(null);
+      const baseSlugMatch = fullSlug.match(/^(.+?)(?:-\d+(?:gb|tb))?$/i);
+      const baseSlug = baseSlugMatch ? baseSlugMatch[1] : fullSlug;
 
-      try {
-        const baseSlugMatch = fullSlug.match(/^(.+?)(?:-\d+(?:gb|tb))?$/i);
-        const baseSlug = baseSlugMatch ? baseSlugMatch[1] : fullSlug;
+      const response = await categoryInfo.api.get(baseSlug, {
+        params: sku ? { sku } : {},
+      });
+      
+      const data = response.data?.data || response.data;
+      const fetchedProduct = data.product || data;
+      const fetchedVariants = data.variants || fetchedProduct.variants || [];
 
-        const response = await categoryInfo.api.get(baseSlug, {
-          params: sku ? { sku } : {},
-        });
-        const data = response.data.data;
-        const fetchedProduct = data.product || data;
-        const fetchedVariants = data.variants || fetchedProduct.variants || [];
+      setProduct(fetchedProduct);
+      setVariants(fetchedVariants);
 
-        setProduct(fetchedProduct);
-        setVariants(fetchedVariants);
-
-        let variantToSelect = null;
-        if (sku) {
-          variantToSelect = fetchedVariants.find((v) => v.sku === sku);
-        }
-        if (!variantToSelect && fetchedVariants.length > 0) {
-          variantToSelect = fetchedVariants[0];
-        }
-
-        if (variantToSelect) {
-          setSelectedVariant(variantToSelect);
-          const keyField =
-            VARIANT_KEY_FIELD[fetchedProduct.category] || "storage";
-          setUserSelectedKey(variantToSelect[keyField]);
-        }
-
-        // Set default tab to variant
-        setActiveMediaTab("variant");
-        setSelectedImage(0);
-
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Error fetching product:", err);
-        setError(err.response?.data?.message || "Không thể tải sản phẩm");
-        setIsLoading(false);
+      let variantToSelect = null;
+      if (sku) {
+        variantToSelect = fetchedVariants.find((v) => v.sku === sku);
       }
-    };
+      if (!variantToSelect && fetchedVariants.length > 0) {
+        variantToSelect = fetchedVariants[0];
+      }
 
-    fetchProductData();
-  }, [categorySlug, categoryInfo]);
+      if (variantToSelect) {
+        setSelectedVariant(variantToSelect);
+        const keyField = VARIANT_KEY_FIELD[fetchedProduct.category] || "variantName";
+        setUserSelectedKey(variantToSelect[keyField]);
+      }
+
+      setActiveMediaTab("variant");
+      setSelectedImage(0);
+      setIsLoading(false);
+    } catch (err) {
+      console.error("Error fetching product:", err);
+      setError(err.message || "Không thể tải sản phẩm");
+      setIsLoading(false);
+    }
+  };
+
+  fetchProductData();
+}, [categorySlug, fullSlug, sku]);
 
   const handleVariantSelect = (variant, isColorChange = false) => {
     if (!variant) return;

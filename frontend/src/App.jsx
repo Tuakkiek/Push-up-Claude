@@ -282,6 +282,8 @@ function App() {
         {/* VNPay Return */}
         <Route path="/payment/vnpay/return" element={<VNPayReturnPage />} />
 
+        <Route path="/:categorySlug/:productSlug" element={<ProductDetailPage />} />
+
         {/* ========================================
             404 - NOT FOUND
         ======================================== */}
