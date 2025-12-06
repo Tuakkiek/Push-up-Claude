@@ -1,21 +1,27 @@
-// frontend/src/pages/HomePage.jsx
-// ✅ FIX: Use new aggregator API
-
+// frontend/src/pages/HomePage.jsx - FIXED VERSION
 import React, { useEffect, useState, useCallback } from "react";
 import { Loading } from "@/components/shared/Loading";
 import DynamicSection from "@/components/homepage/DynamicSection";
 import ProductEditModal from "@/components/shared/ProductEditModal";
 import { useAuthStore } from "@/store/authStore";
 import { homePageAPI } from "@/lib/api";
+import {
+  iPhoneAPI,
+  iPadAPI,
+  macAPI,
+  airPodsAPI,
+  appleWatchAPI,
+  accessoryAPI,
+} from "@/lib/api";
 import { toast } from "sonner";
 
 const API_MAP = {
-  iPhone: "iphones",
-  iPad: "ipads",
-  Mac: "macs",
-  AirPods: "airpods",
-  AppleWatch: "applewatches",
-  Accessories: "accessories",
+  iPhone: iPhoneAPI,
+  iPad: iPadAPI,
+  Mac: macAPI,
+  AirPods: airPodsAPI,
+  AppleWatch: appleWatchAPI,
+  Accessories: accessoryAPI,
 };
 
 const HomePage = () => {
@@ -25,6 +31,7 @@ const HomePage = () => {
   const [allProducts, setAllProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
@@ -32,7 +39,9 @@ const HomePage = () => {
     isAuthenticated &&
     ["ADMIN", "WAREHOUSE_STAFF", "ORDER_MANAGER"].includes(user?.role);
 
-  // ✅ FETCH HOMEPAGE LAYOUT
+  // ============================================
+  // FETCH HOMEPAGE LAYOUT
+  // ============================================
   const fetchLayout = useCallback(async () => {
     try {
       const response = await homePageAPI.getLayout();
@@ -44,31 +53,41 @@ const HomePage = () => {
     }
   }, []);
 
-  // ✅ FETCH ALL PRODUCTS - USE AGGREGATOR API
+  // ============================================
+  // ✅ FIXED: FETCH ALL PRODUCTS USING AGGREGATOR
+  // ============================================
   const fetchAllProducts = useCallback(async () => {
     try {
-      console.log("📥 Fetching all products...");
+      console.log("📥 Fetching all products via aggregator...");
 
-      // ✅ USE NEW AGGREGATOR API
+      // ✅ USE AGGREGATOR API
       const response = await fetch("/api/products-aggregator/all?limit=1000");
       const data = await response.json();
 
-      console.log("📦 Response:", data);
+      console.log("📦 Aggregator Response:", {
+        success: data.success,
+        productsCount: data.data?.products?.length,
+        total: data.data?.total,
+      });
 
-      if (data.success) {
+      if (data.success && data.data?.products) {
         console.log("✅ Products loaded:", data.data.products.length);
         setAllProducts(data.data.products);
       } else {
-        console.error("❌ Failed to load products:", data.message);
+        console.error("❌ Unexpected response structure:", data);
         toast.error(data.message || "Không thể tải sản phẩm");
+        setAllProducts([]);
       }
     } catch (err) {
       console.error("❌ Error loading products:", err);
       toast.error("Không thể tải dữ liệu sản phẩm");
+      setAllProducts([]);
     }
   }, []);
 
-  // ✅ INITIAL LOAD
+  // ============================================
+  // INITIAL LOAD
+  // ============================================
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -79,50 +98,42 @@ const HomePage = () => {
     loadData();
   }, [fetchLayout, fetchAllProducts]);
 
-  // ✅ HANDLERS
+  // ============================================
+  // HANDLERS
+  // ============================================
   const handleEdit = (product) => {
     setEditingProduct(product);
     setShowEditModal(true);
   };
 
   const handleDelete = async (productId, category) => {
-    const apiEndpoint = API_MAP[category];
-    if (!apiEndpoint) {
+    const api = API_MAP[category];
+    if (!api?.delete) {
       toast.error("Không hỗ trợ xóa sản phẩm này");
       return;
     }
 
     try {
-      const token = localStorage.getItem("auth-storage")
-        ? JSON.parse(localStorage.getItem("auth-storage")).state?.token
-        : null;
-
-      const response = await fetch(`/api/${apiEndpoint}/${productId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        toast.success("Xóa sản phẩm thành công");
-        fetchAllProducts();
-      } else {
-        throw new Error("Xóa thất bại");
-      }
+      await api.delete(productId);
+      toast.success("Xóa sản phẩm thành công");
+      fetchAllProducts(); // Reload products
     } catch (error) {
-      toast.error(error.message || "Xóa sản phẩm thất bại");
+      toast.error(error.response?.data?.message || "Xóa sản phẩm thất bại");
     }
   };
 
   const handleSaveProduct = () => {
-    fetchAllProducts();
+    fetchAllProducts(); // Reload products after edit
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
   if (isLoading) {
     return <Loading />;
   }
 
+  // Sort sections by order
   const sortedSections =
     layout?.sections
       ?.filter((s) => s.enabled)
@@ -154,6 +165,7 @@ const HomePage = () => {
         </div>
       )}
 
+      {/* Product Edit Modal */}
       <ProductEditModal
         open={showEditModal}
         onOpenChange={setShowEditModal}
