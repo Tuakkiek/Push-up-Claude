@@ -71,6 +71,11 @@ const DashboardLayout = () => {
           icon: Settings,
           label: "Thông số kỹ thuật",
         },
+        {
+          path: "/admin/categories",
+          icon: Layout,
+          label: "Quản lý Category",
+        },
 
         { path: "/warehouse/products", icon: Package, label: "Sản phẩm" },
         { path: "/order-manager/orders", icon: ShoppingBag, label: "Đơn hàng" },

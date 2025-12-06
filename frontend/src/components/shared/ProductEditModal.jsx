@@ -234,8 +234,25 @@ const ProductEditModal = ({
     const fetchCustomConfig = async () => {
       setIsLoadingConfig(true);
       try {
-        const response = await customSpecAPI.getByCategory(effectiveCategory);
-        setCustomSpecConfig(response.data.data.customSpec);
+        // Kiểm tra xem có phải fixed category không
+        const fixedCategories = [
+          "iPhone",
+          "iPad",
+          "Mac",
+          "AirPods",
+          "AppleWatch",
+          "Accessories",
+        ];
+
+        if (!fixedCategories.includes(effectiveCategory)) {
+          // Category mới → LUÔN dùng DynamicSpecsForm
+          const response = await customSpecAPI.getByCategory(effectiveCategory);
+          setCustomSpecConfig(response.data.data.customSpec);
+        } else {
+          // Fixed category → kiểm tra có bật custom không
+          const response = await customSpecAPI.getByCategory(effectiveCategory);
+          setCustomSpecConfig(response.data.data.customSpec);
+        }
       } catch (error) {
         console.error("Failed to fetch custom spec config:", error);
         setCustomSpecConfig(null);
@@ -246,7 +263,6 @@ const ProductEditModal = ({
 
     fetchCustomConfig();
   }, [open, effectiveCategory]);
-
   // === RENDER LOADING STATE ===
   if (!formData || !effectiveCategory) {
     return (

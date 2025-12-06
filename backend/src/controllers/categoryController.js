@@ -3,11 +3,16 @@ import Category from "../models/Category.js";
 
 export const listCategories = async (req, res) => {
   try {
-    const categories = await Category.find({}).lean();
-    console.log("[Category] list =>", categories.length);
-    res.json({ success: true, data: categories });
+    const { active } = req.query;
+    const query = active !== undefined ? { active: active === "true" } : {};
+
+    const categories = await Category.find(query).sort({ name: 1 });
+
+    res.json({
+      success: true,
+      data: { categories },
+    });
   } catch (error) {
-    console.error("[Category] list error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -15,24 +20,59 @@ export const listCategories = async (req, res) => {
 export const getCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const category = await Category.findById(id).lean();
-    if (!category) return res.status(404).json({ success: false, message: "Không tìm thấy danh mục" });
-    console.log("[Category] get =>", id);
-    res.json({ success: true, data: category });
+    const category = await Category.findById(id);
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
+
+    res.json({ success: true, data: { category } });
   } catch (error) {
-    console.error("[Category] get error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const createCategory = async (req, res) => {
   try {
-    console.log("[Category] create request:", JSON.stringify(req.body));
-    const category = await Category.create(req.body);
-    console.log("[Category] created:", category._id);
-    res.status(201).json({ success: true, data: category });
+    const { name, slug, skuPrefix, productFields, variantFields } = req.body;
+
+    // Validate required fields
+    if (!name || !slug) {
+      return res.status(400).json({
+        success: false,
+        message: "Name và slug là bắt buộc",
+      });
+    }
+
+    // Check duplicate slug
+    const existing = await Category.findOne({ slug });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug đã tồn tại",
+      });
+    }
+
+    const category = new Category({
+      name,
+      slug,
+      skuPrefix: skuPrefix || "PRODUCT",
+      productFields: productFields || [],
+      variantFields: variantFields || [],
+      active: true,
+    });
+
+    await category.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo category thành công",
+      data: { category },
+    });
   } catch (error) {
-    console.error("[Category] create error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -40,12 +80,42 @@ export const createCategory = async (req, res) => {
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("[Category] update request:", id, JSON.stringify(req.body));
-    const category = await Category.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
-    if (!category) return res.status(404).json({ success: false, message: "Không tìm thấy danh mục" });
-    res.json({ success: true, data: category });
+    const updates = req.body;
+
+    // Check if slug is being changed and if it conflicts
+    if (updates.slug) {
+      const existing = await Category.findOne({
+        slug: updates.slug,
+        _id: { $ne: id },
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "Slug đã tồn tại",
+        });
+      }
+    }
+
+    const category = await Category.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Cập nhật category thành công",
+      data: { category },
+    });
   } catch (error) {
-    console.error("[Category] update error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -53,12 +123,38 @@ export const updateCategory = async (req, res) => {
 export const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("[Category] delete:", id);
-    const category = await Category.findByIdAndDelete(id);
-    if (!category) return res.status(404).json({ success: false, message: "Không tìm thấy danh mục" });
-    res.json({ success: true, data: { id } });
+
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
+
+    // Check if it's a fixed category (optional protection)
+    const fixedCategories = [
+      "iphone",
+      "ipad",
+      "mac",
+      "airpods",
+      "applewatch",
+      "accessories",
+    ];
+    if (fixedCategories.includes(category.slug)) {
+      return res.status(403).json({
+        success: false,
+        message: "Không thể xóa category cố định",
+      });
+    }
+
+    await category.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Xóa category thành công",
+    });
   } catch (error) {
-    console.error("[Category] delete error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };

@@ -1,5 +1,6 @@
 // frontend/src/pages/admin/CustomSpecsManager.jsx
 import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,8 @@ const FIELD_TYPES = [
 ];
 
 const CustomSpecsManager = () => {
+  const { category: categoryParam } = useParams();
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState("iPhone");
   const [config, setConfig] = useState({
     useCustomSpecs: false,
@@ -42,6 +45,12 @@ const CustomSpecsManager = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!categoryParam) {
+      navigate("/admin/categories");
+    }
+  }, [categoryParam, navigate]);
 
   useEffect(() => {
     fetchConfig(activeCategory);

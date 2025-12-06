@@ -48,6 +48,7 @@ import VideosPage from "@/pages/VideosPage"; // ✅ NEW
 
 import VNPayReturnPage from "@/pages/customer/VNPayReturnPage";
 import CustomSpecsManager from "./pages/admin/CustomSpecsManager";
+import CategoryManagement from './pages/admin/CategoryManagement';
 
 // ============================================
 // SCROLL TO TOP
@@ -201,6 +202,8 @@ function App() {
           <Route path="/admin/short-videos" element={<ShortVideoAdminPage />} />
 
           <Route path="/admin/custom-specs" element={<CustomSpecsManager />} />
+          <Route path="/admin/categories" element={<CategoryManagement />} />
+          <Route path="/admin/custom-specs/:category" element={<CustomSpecsManager />} />
         </Route>
 
         {/* ========================================

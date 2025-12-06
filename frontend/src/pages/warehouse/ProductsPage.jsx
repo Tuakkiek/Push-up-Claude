@@ -1,10 +1,10 @@
 // frontend/src/pages/warehouse/ProductsPage.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Plus, Search, Package, Library } from "lucide-react";
+import { Plus, Search, Package } from "lucide-react";
 import {
   iPhoneAPI,
   iPadAPI,
@@ -27,13 +27,12 @@ import { Loading } from "@/components/shared/Loading";
 import ProductCard from "@/components/shared/ProductCard";
 import ProductEditModal from "@/components/shared/ProductEditModal";
 import CSVImporter from "@/components/shared/CSVImporter";
-import { CATEGORIES } from "@/lib/productConstants";
-import { Label } from "recharts";
+import { Label } from "@/components/ui/label";
 
 // ============================================
-// API MAPPING
+// API MAPPING - FIXED CATEGORIES
 // ============================================
-const API_MAP = {
+const FIXED_API_MAP = {
   iPhone: iPhoneAPI,
   iPad: iPadAPI,
   Mac: macAPI,
@@ -42,13 +41,64 @@ const API_MAP = {
   Accessories: accessoryAPI,
 };
 
+// ✅ DYNAMIC API - for new categories
+const getDynamicAPI = (category) => ({
+  async getAll(params) {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await fetch(
+      `/api/categories/${category}/products?${queryString}`,
+      {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      }
+    );
+    return response.json();
+  },
+  async create(data) {
+    const response = await fetch(`/api/categories/${category}/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+  async update(id, data) {
+    const response = await fetch(`/api/categories/${category}/products/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+  async delete(id) {
+    const response = await fetch(`/api/categories/${category}/products/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    return response.json();
+  },
+});
+
 const ProductsPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState("iPhone");
+
+  // ✅ NEW: Dynamic categories
+  const [categories, setCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
+  const categoryFromUrl = searchParams.get("category");
+  const [activeTab, setActiveTab] = useState(categoryFromUrl || "iPhone");
+
   const [products, setProducts] = useState([]);
-  const [total, setTotal] = useState(0); // THÊM: tổng số sản phẩm
-  const [page, setPage] = useState(1); // THÊM: trang hiện tại
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -59,24 +109,92 @@ const ProductsPage = () => {
   const [showJsonForm, setShowJsonForm] = useState(false);
   const [jsonInput, setJsonInput] = useState("");
   const [showCSVImporter, setShowCSVImporter] = useState(false);
-  const LIMIT = 12; // Số sản phẩm mỗi trang
 
-  // THÊM DÒNG NÀY
-const pagination = {
-  currentPage: page,
-  totalPages: Math.ceil(total / LIMIT),
-  hasPrev: page > 1,
-  hasNext: page < Math.ceil(total / LIMIT),
-};
+  const LIMIT = 12;
+
+  const pagination = {
+    currentPage: page,
+    totalPages: Math.ceil(total / LIMIT),
+    hasPrev: page > 1,
+    hasNext: page < Math.ceil(total / LIMIT),
+  };
+
+  // ✅ Load categories on mount
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  // ✅ Update activeTab when URL changes
+  useEffect(() => {
+    if (categoryFromUrl && categories.some((c) => c.slug === categoryFromUrl)) {
+      setActiveTab(categoryFromUrl);
+    }
+  }, [categoryFromUrl, categories]);
 
   useEffect(() => {
-    fetchProducts();
-  }, [activeTab, page, searchQuery, justCreatedProductId]);
+    if (categories.length > 0) {
+      fetchProducts();
+    }
+  }, [activeTab, page, searchQuery, justCreatedProductId, categories]);
 
-  // Reset trang khi đổi danh mục hoặc tìm kiếm
   useEffect(() => {
     setPage(1);
   }, [activeTab, searchQuery]);
+
+  // ✅ NEW: Load categories from API
+  const loadCategories = async () => {
+    console.log("📥 Loading categories...");
+    setLoadingCategories(true);
+    try {
+      const response = await fetch("/api/categories");
+      const data = await response.json();
+
+      if (data.success) {
+        const activeCats = data.data.categories
+          .filter((cat) => cat.active)
+          .map((cat) => ({
+            value: cat.name,
+            label: cat.name,
+            slug: cat.slug,
+            isFixed: [
+              "iPhone",
+              "iPad",
+              "Mac",
+              "AirPods",
+              "AppleWatch",
+              "Accessories",
+            ].includes(cat.name),
+          }));
+
+        console.log("✅ Categories loaded:", activeCats);
+        setCategories(activeCats);
+
+        // Set default tab nếu chưa có
+        if (!activeTab && activeCats.length > 0) {
+          setActiveTab(activeCats[0].value);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Load categories error:", error);
+      toast.error("Lỗi khi tải danh sách category");
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  // ✅ Get API based on category (fixed or dynamic)
+  const getAPI = () => {
+    const currentCategory = categories.find((c) => c.value === activeTab);
+    if (!currentCategory) return null;
+
+    // Nếu là fixed category, dùng API cũ
+    if (currentCategory.isFixed) {
+      return FIXED_API_MAP[activeTab];
+    }
+
+    // Nếu là category mới, dùng dynamic API
+    return getDynamicAPI(currentCategory.slug);
+  };
 
   // ============================================
   // FETCH PRODUCTS
@@ -84,10 +202,9 @@ const pagination = {
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
-      const api = API_MAP[activeTab];
+      const api = getAPI();
       if (!api?.getAll) throw new Error("API không hợp lệ");
 
-      // THÊM: truyền page, limit, search
       const response = await api.getAll({
         page,
         limit: LIMIT,
@@ -98,15 +215,13 @@ const pagination = {
       if (!data) throw new Error("Không có dữ liệu");
 
       const productsList = data.products || [];
-      const totalCount = data.total || productsList.length; // backend phải trả total
+      const totalCount = data.total || productsList.length;
 
-      // Tính top 10 mới nhất
       const sortedByDate = [...productsList].sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
       const top10NewIds = sortedByDate.slice(0, 10).map((p) => p._id);
 
-      // Top 10 bán chạy
       let top10SellerIds = [];
       try {
         const res = await analyticsAPI.getTopSellers(activeTab, 10);
@@ -123,9 +238,8 @@ const pagination = {
       }));
 
       setProducts(productsWithFlags);
-      setTotal(totalCount); // quan trọng!
+      setTotal(totalCount);
 
-      // Auto mở modal nếu vừa tạo sản phẩm
       if (justCreatedProductId) {
         const newProduct = productsWithFlags.find(
           (p) => p._id === justCreatedProductId
@@ -153,7 +267,7 @@ const pagination = {
       setJsonInput("");
       setShowJsonForm(true);
     } else if (mode === "csv") {
-      setShowCSVImporter(true); // ✅ THÊM
+      setShowCSVImporter(true);
     } else {
       setCurrentMode("create");
       setCurrentProduct(null);
@@ -176,14 +290,19 @@ const pagination = {
 
     setIsLoading(true);
     try {
-      const api = API_MAP[activeTab];
+      const api = getAPI();
       if (!api || !api.delete) {
         throw new Error(`API for ${activeTab} is not properly configured`);
       }
       console.log(`✅ Sending DELETE request for product ID: ${productId}`);
       await api.delete(productId);
       toast.success("Xóa sản phẩm thành công");
-      await fetchProducts();
+
+      if (products.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        fetchProducts();
+      }
     } catch (error) {
       console.error("❌ Error deleting product:", {
         message: error.message,
@@ -192,12 +311,6 @@ const pagination = {
       toast.error(error.response?.data?.message || "Xóa sản phẩm thất bại");
     } finally {
       setIsLoading(false);
-      // Nếu xóa hết sản phẩm ở trang cuối → lùi về trang trước
-      if (products.length === 1 && page > 1) {
-        setPage(page - 1);
-      } else {
-        fetchProducts();
-      }
     }
   };
 
@@ -242,7 +355,7 @@ const pagination = {
 
     setIsLoading(true);
     try {
-      const api = API_MAP[activeTab];
+      const api = getAPI();
       const response = await api.create(payload);
       const newId = response?.data?._id || response?.data?.id;
       toast.success("Tạo sản phẩm thành công!");
@@ -257,14 +370,15 @@ const pagination = {
     }
   };
 
-  // ============================================
-  // FILTER PRODUCTS
-  // ============================================
   const filteredProducts = products.filter(
     (product) =>
       product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.model?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (loadingCategories) {
+    return <Loading />;
+  }
 
   return (
     <div className="space-y-6">
@@ -273,7 +387,7 @@ const pagination = {
         <div>
           <h1 className="text-3xl font-bold mb-2">Quản lý sản phẩm</h1>
           <p className="text-muted-foreground">
-            Quản lý sản phẩm theo từng danh mục
+            Quản lý sản phẩm theo từng danh mục ({categories.length} categories)
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -284,7 +398,7 @@ const pagination = {
             <SelectContent>
               <SelectItem value="normal">Bình thường</SelectItem>
               <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="csv">CSV</SelectItem> {/* ✅ THÊM */}
+              <SelectItem value="csv">CSV</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={() => handleCreate(addMode)}>
@@ -292,10 +406,14 @@ const pagination = {
           </Button>
         </div>
       </div>
-      {/* CATEGORY TABS */}
+
+      {/* CATEGORY TABS - ✅ DYNAMIC */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full">
-          {CATEGORIES.map((cat) => (
+        <TabsList
+          className="grid w-full"
+          style={{ gridTemplateColumns: `repeat(${categories.length}, 1fr)` }}
+        >
+          {categories.map((cat) => (
             <TabsTrigger key={cat.value} value={cat.value}>
               {cat.label}
             </TabsTrigger>
@@ -321,7 +439,7 @@ const pagination = {
         </div>
 
         {/* PRODUCTS GRID */}
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <TabsContent key={cat.value} value={cat.value}>
             {isLoading ? (
               <Loading />
@@ -357,36 +475,38 @@ const pagination = {
                 })}
               </div>
             )}
-                                       {/* PHÂN TRANG ĐẸP – GIỐNG CASHIER */}
-              {pagination.totalPages > 1 && (
-                <div className="flex justify-center items-center gap-8 mt-12">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page === 1 || isLoading}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    Trước
-                  </Button>
 
-                  <div className="text-sm font-medium min-w-[140px] text-center">
-                    Trang {pagination.currentPage} / {pagination.totalPages}
-                  </div>
+            {/* PAGINATION */}
+            {pagination.totalPages > 1 && (
+              <div className="flex justify-center items-center gap-8 mt-12">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1 || isLoading}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Trước
+                </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page === pagination.totalPages || isLoading}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Sau
-                  </Button>
+                <div className="text-sm font-medium min-w-[140px] text-center">
+                  Trang {pagination.currentPage} / {pagination.totalPages}
                 </div>
-              )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === pagination.totalPages || isLoading}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Sau
+                </Button>
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>
-      {/* JSON FORM MODAL */}
+
+      {/* MODALS */}
       {showJsonForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
@@ -397,9 +517,7 @@ const pagination = {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setShowJsonForm(false);
-                }}
+                onClick={() => setShowJsonForm(false)}
               >
                 ✕
               </Button>
@@ -414,7 +532,7 @@ const pagination = {
                     onChange={(e) => setJsonInput(e.target.value)}
                     rows={20}
                     className="w-full px-3 py-2 border rounded-md font-mono"
-                    placeholder="Nhập JSON ở đây... (cấu trúc tương tự formData)"
+                    placeholder="Nhập JSON ở đây..."
                   />
                 </div>
               </div>
@@ -423,9 +541,7 @@ const pagination = {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setShowJsonForm(false);
-                  }}
+                  onClick={() => setShowJsonForm(false)}
                 >
                   Hủy
                 </Button>
@@ -437,7 +553,7 @@ const pagination = {
           </div>
         </div>
       )}
-      {/* CSV IMPORTER MODAL */}
+
       {showCSVImporter && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl p-6">
@@ -456,7 +572,7 @@ const pagination = {
 
             <CSVImporter
               category={activeTab}
-              api={API_MAP[activeTab]}
+              api={getAPI()}
               onSuccess={() => {
                 setShowCSVImporter(false);
                 fetchProducts();
@@ -465,7 +581,7 @@ const pagination = {
           </div>
         </div>
       )}
-      {/* SHARED EDIT/CREATE MODAL */}
+
       <ProductEditModal
         open={showModal}
         onOpenChange={setShowModal}

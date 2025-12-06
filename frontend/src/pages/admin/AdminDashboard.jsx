@@ -24,6 +24,7 @@ import EmployeeKPICharts from "@/components/admin/dashboard/EmployeeKPICharts"; 
 // Import hook để fetch data
 import { useDashboardData } from "@/hooks/useDashboardData";
 
+
 const AdminDashboard = () => {
   const [timeRange, setTimeRange] = useState("30days");
   const [activeTab, setActiveTab] = useState("overview");
