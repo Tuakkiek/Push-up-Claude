@@ -265,20 +265,22 @@ const ProductCard = ({
     setShowDeleteDialog(false);
   };
 
-  const handleCardClick = () => {
+const handleCardClick = () => {
     // ✅ FIXED: Dynamic category mapping
-    const categoryPath = {
+    const fixedCategoryPaths = {
       iPhone: "dien-thoai",
       iPad: "may-tinh-bang",
       Mac: "macbook",
       AppleWatch: "apple-watch",
       AirPods: "tai-nghe",
       Accessories: "phu-kien",
-    }[product.category];
+    };
 
-    // ✅ If not a fixed category, use categorySlug from API
-    const finalPath =
-      categoryPath || product.categorySlug || product.category.toLowerCase();
+    // Check if it's a fixed category
+    const categoryPath = fixedCategoryPaths[product.category];
+    
+    // ✅ If not a fixed category, use categorySlug from product or convert category name to slug
+    const finalPath = categoryPath || product.categorySlug || product.category.toLowerCase().replace(/\s+/g, "-");
 
     if (!finalPath) {
       console.warn("Unknown category:", product.category);
@@ -301,7 +303,6 @@ const ProductCard = ({
 
     toast.error("Không thể xem chi tiết sản phẩm");
   };
-
   const getVariantLabel = (variant) => {
     if (!variant) return "";
     const cat = product?.category;

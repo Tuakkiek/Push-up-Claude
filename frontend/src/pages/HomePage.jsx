@@ -1,7 +1,5 @@
-// ============================================
-// FILE: frontend/src/pages/HomePage.jsx
-// ✅ FULLY DYNAMIC - Reads sections from database
-// ============================================
+// frontend/src/pages/HomePage.jsx
+// ✅ FIX: Use new aggregator API
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Loading } from "@/components/shared/Loading";
@@ -9,23 +7,15 @@ import DynamicSection from "@/components/homepage/DynamicSection";
 import ProductEditModal from "@/components/shared/ProductEditModal";
 import { useAuthStore } from "@/store/authStore";
 import { homePageAPI } from "@/lib/api";
-import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
-} from "@/lib/api";
 import { toast } from "sonner";
 
 const API_MAP = {
-  iPhone: iPhoneAPI,
-  iPad: iPadAPI,
-  Mac: macAPI,
-  AirPods: airPodsAPI,
-  AppleWatch: appleWatchAPI,
-  Accessories: accessoryAPI,
+  iPhone: "iphones",
+  iPad: "ipads",
+  Mac: "macs",
+  AirPods: "airpods",
+  AppleWatch: "applewatches",
+  Accessories: "accessories",
 };
 
 const HomePage = () => {
@@ -35,7 +25,6 @@ const HomePage = () => {
   const [allProducts, setAllProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
@@ -43,9 +32,7 @@ const HomePage = () => {
     isAuthenticated &&
     ["ADMIN", "WAREHOUSE_STAFF", "ORDER_MANAGER"].includes(user?.role);
 
-  // ============================================
-  // FETCH HOMEPAGE LAYOUT
-  // ============================================
+  // ✅ FETCH HOMEPAGE LAYOUT
   const fetchLayout = useCallback(async () => {
     try {
       const response = await homePageAPI.getLayout();
@@ -57,35 +44,31 @@ const HomePage = () => {
     }
   }, []);
 
-  // ============================================
-  // FETCH ALL PRODUCTS
-  // ============================================
+  // ✅ FETCH ALL PRODUCTS - USE AGGREGATOR API
   const fetchAllProducts = useCallback(async () => {
-  try {
-    console.log("📥 Fetching all products...");
-    
-    // ✅ USE NEW AGGREGATOR API
-    const response = await fetch("/api/products-aggregator/all?limit=1000");
-    const data = await response.json();
+    try {
+      console.log("📥 Fetching all products...");
 
-    console.log("📦 Response:", data);
+      // ✅ USE NEW AGGREGATOR API
+      const response = await fetch("/api/products-aggregator/all?limit=1000");
+      const data = await response.json();
 
-    if (data.success) {
-      console.log("✅ Products loaded:", data.data.products.length);
-      setAllProducts(data.data.products);
-    } else {
-      console.error("❌ Failed to load products:", data.message);
-      toast.error(data.message || "Không thể tải sản phẩm");
+      console.log("📦 Response:", data);
+
+      if (data.success) {
+        console.log("✅ Products loaded:", data.data.products.length);
+        setAllProducts(data.data.products);
+      } else {
+        console.error("❌ Failed to load products:", data.message);
+        toast.error(data.message || "Không thể tải sản phẩm");
+      }
+    } catch (err) {
+      console.error("❌ Error loading products:", err);
+      toast.error("Không thể tải dữ liệu sản phẩm");
     }
-  } catch (err) {
-    console.error("❌ Error loading products:", err);
-    toast.error("Không thể tải dữ liệu sản phẩm");
-  }
-}, []);
+  }, []);
 
-  // ============================================
-  // INITIAL LOAD
-  // ============================================
+  // ✅ INITIAL LOAD
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -96,42 +79,50 @@ const HomePage = () => {
     loadData();
   }, [fetchLayout, fetchAllProducts]);
 
-  // ============================================
-  // HANDLERS
-  // ============================================
+  // ✅ HANDLERS
   const handleEdit = (product) => {
     setEditingProduct(product);
     setShowEditModal(true);
   };
 
   const handleDelete = async (productId, category) => {
-    const api = API_MAP[category];
-    if (!api?.delete) {
+    const apiEndpoint = API_MAP[category];
+    if (!apiEndpoint) {
       toast.error("Không hỗ trợ xóa sản phẩm này");
       return;
     }
 
     try {
-      await api.delete(productId);
-      toast.success("Xóa sản phẩm thành công");
-      fetchAllProducts(); // Reload products
+      const token = localStorage.getItem("auth-storage")
+        ? JSON.parse(localStorage.getItem("auth-storage")).state?.token
+        : null;
+
+      const response = await fetch(`/api/${apiEndpoint}/${productId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast.success("Xóa sản phẩm thành công");
+        fetchAllProducts();
+      } else {
+        throw new Error("Xóa thất bại");
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Xóa sản phẩm thất bại");
+      toast.error(error.message || "Xóa sản phẩm thất bại");
     }
   };
 
   const handleSaveProduct = () => {
-    fetchAllProducts(); // Reload products after edit
+    fetchAllProducts();
   };
 
-  // ============================================
-  // RENDER
-  // ============================================
   if (isLoading) {
     return <Loading />;
   }
 
-  // Sort sections by order
   const sortedSections =
     layout?.sections
       ?.filter((s) => s.enabled)
@@ -163,7 +154,6 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* Product Edit Modal */}
       <ProductEditModal
         open={showEditModal}
         onOpenChange={setShowEditModal}

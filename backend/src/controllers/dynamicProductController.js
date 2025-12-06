@@ -31,10 +31,10 @@ const createDynamicProductSchema = (category) => {
       featuredImages: [{ type: String, trim: true }],
       videoUrl: { type: String, trim: true, default: "" },
       specifications: { type: mongoose.Schema.Types.Mixed, default: {} },
-      
+
       // ✅ DON'T USE REF - just store ObjectIds
       variants: [{ type: mongoose.Schema.Types.ObjectId }],
-      
+
       condition: { type: String, default: "NEW" },
       brand: { type: String, default: "Apple", trim: true },
       productType: { type: String, required: true },
@@ -46,14 +46,13 @@ const createDynamicProductSchema = (category) => {
       totalReviews: { type: Number, default: 0, min: 0 },
       salesCount: { type: Number, default: 0, min: 0 },
     },
-    { 
-      timestamps: true, 
-      strict: false, // ✅ Allow any fields
-      collection: undefined // Will be set explicitly
+    {
+      timestamps: true,
+      strict: false,
+      collection: undefined,
     }
   );
 };
-
 
 // ============================================
 // HELPER: Get all collections from MongoDB
@@ -80,12 +79,11 @@ const findCollectionForCategory = async (categoryName) => {
   console.log(`🔍 Looking for collection for category: ${categoryName}`);
   console.log(`📂 Available collections:`, allCollections);
 
-  // Try different patterns for product collection
   const patterns = [
-    categoryName, // Vision
-    categoryLower, // vision
-    `${categoryLower}s`, // visions
-    `${categoryName}s`, // Visions
+    categoryName,
+    categoryLower,
+    `${categoryLower}s`,
+    `${categoryName}s`,
   ];
 
   for (const pattern of patterns) {
@@ -98,7 +96,6 @@ const findCollectionForCategory = async (categoryName) => {
   console.warn(`⚠️ No collection found for ${categoryName}`);
   return null;
 };
-
 
 // ============================================
 // CREATE DYNAMIC VARIANT SCHEMA
@@ -118,10 +115,10 @@ const createDynamicVariantSchema = (category) => {
       salesCount: { type: Number, default: 0, min: 0 },
       specs: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
-    { 
+    {
       timestamps: true,
       strict: false,
-      collection: undefined
+      collection: undefined,
     }
   );
 };
@@ -138,7 +135,6 @@ const getOrCreateModel = async (category, isVariant = false) => {
     try {
       console.log(`🔨 Creating dynamic model: ${modelName}`);
 
-      // Find actual collection name from MongoDB
       const baseCollection = await findCollectionForCategory(category);
 
       if (!baseCollection) {
@@ -146,9 +142,8 @@ const getOrCreateModel = async (category, isVariant = false) => {
         return null;
       }
 
-      // Determine variant collection name
       const collectionName = isVariant
-        ? `${baseCollection.replace(/s$/, "")}variants` // visions → visionvariants
+        ? `${baseCollection.replace(/s$/, "")}variants`
         : baseCollection;
 
       console.log(`📦 Using collection: ${collectionName}`);
@@ -157,7 +152,6 @@ const getOrCreateModel = async (category, isVariant = false) => {
         ? createDynamicVariantSchema(category)
         : createDynamicProductSchema(category);
 
-      // Add strict: false to allow any fields
       schema.set("strict", false);
 
       const model = mongoose.model(modelName, schema, collectionName);
@@ -172,198 +166,7 @@ const getOrCreateModel = async (category, isVariant = false) => {
 };
 
 // ============================================
-// CREATE PRODUCT - ✅ COMPLETELY FIXED
-// ============================================
-export const createDynamicProduct = async (req, res) => {
-  const { category } = req.params;
-  let session = null;
-  let transactionStarted = false;
-
-  try {
-    console.log("🔵 START: Create dynamic product for category:", category);
-
-    // Validate category exists
-    const categoryDoc = await Category.findOne({ slug: category });
-    if (!categoryDoc) {
-      return res.status(404).json({
-        success: false,
-        message: "Category không tồn tại",
-      });
-    }
-
-    const {
-      createVariants,
-      variants,
-      slug: frontendSlug,
-      ...productData
-    } = req.body;
-
-    // Validate required fields
-    if (!productData.name?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Tên sản phẩm là bắt buộc",
-      });
-    }
-    if (!productData.model?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Model là bắt buộc",
-      });
-    }
-    if (!productData.createdBy) {
-      return res.status(400).json({
-        success: false,
-        message: "createdBy là bắt buộc",
-      });
-    }
-
-    const finalSlug =
-      frontendSlug?.trim() || createSlug(productData.model.trim());
-    if (!finalSlug) {
-      return res.status(400).json({
-        success: false,
-        message: "Không thể tạo slug từ model",
-      });
-    }
-
-    const ProductModel = getOrCreateModel(categoryDoc.name);
-    const VariantModel = getOrCreateModel(categoryDoc.name, true);
-
-    // Check existing slug BEFORE starting transaction
-    const existingBySlug = await ProductModel.findOne({
-      $or: [{ slug: finalSlug }, { baseSlug: finalSlug }],
-    });
-
-    if (existingBySlug) {
-      return res.status(400).json({
-        success: false,
-        message: `Slug đã tồn tại: ${finalSlug}`,
-      });
-    }
-
-    // ✅ NOW start session and transaction
-    session = await mongoose.startSession();
-    session.startTransaction();
-    transactionStarted = true;
-    console.log("✅ Transaction started");
-
-    // Create product
-    const product = new ProductModel({
-      name: productData.name.trim(),
-      model: productData.model.trim(),
-      slug: finalSlug,
-      baseSlug: finalSlug,
-      description: productData.description?.trim() || "",
-      specifications: productData.specifications || {},
-      condition: productData.condition || "NEW",
-      brand: productData.brand || "Apple",
-      category: categoryDoc.name,
-      productType: categoryDoc.name,
-      status: productData.status || "AVAILABLE",
-      installmentBadge: productData.installmentBadge || "NONE",
-      createdBy: productData.createdBy,
-      featuredImages: productData.featuredImages || [],
-      videoUrl: productData.videoUrl?.trim() || "",
-      averageRating: 0,
-      totalReviews: 0,
-      salesCount: 0,
-      variants: [],
-    });
-
-    await product.save({ session });
-    console.log("✅ Product saved:", product._id);
-
-    // Create variants
-    const variantGroups = createVariants || variants || [];
-    const createdVariantIds = [];
-
-    if (variantGroups.length > 0) {
-      for (const group of variantGroups) {
-        const { color, images = [], options = [] } = group;
-        if (!color?.trim() || !Array.isArray(options) || options.length === 0)
-          continue;
-
-        for (const opt of options) {
-          if (!opt.variantName?.trim()) continue;
-
-          const sku = await getNextSku();
-          const variantSlug = `${finalSlug}-${createSlug(
-            opt.variantName.trim()
-          )}`;
-
-          const variantDoc = new VariantModel({
-            productId: product._id,
-            color: color.trim(),
-            variantName: opt.variantName.trim(),
-            originalPrice: Number(opt.originalPrice) || 0,
-            price: Number(opt.price) || 0,
-            stock: Number(opt.stock) || 0,
-            images: images.filter((img) => img?.trim()),
-            sku,
-            slug: variantSlug,
-            specs: opt.specs || {},
-          });
-
-          await variantDoc.save({ session });
-          createdVariantIds.push(variantDoc._id);
-          console.log("✅ Variant saved:", variantDoc._id);
-        }
-      }
-
-      product.variants = createdVariantIds;
-      await product.save({ session });
-      console.log("✅ Product updated with variant IDs");
-    }
-
-    // ✅ COMMIT TRANSACTION
-    await session.commitTransaction();
-    transactionStarted = false;
-    console.log("✅ Transaction committed successfully");
-
-    // ✅ POPULATE AFTER COMMIT (without session)
-    const populated = await ProductModel.findById(product._id)
-      .populate("variants")
-      .populate("createdBy", "fullName email");
-
-    console.log("✅ Product created successfully:", populated._id);
-
-    res.status(201).json({
-      success: true,
-      message: "Tạo sản phẩm thành công",
-      data: { product: populated },
-    });
-  } catch (error) {
-    console.error("❌ CREATE ERROR:", error);
-
-    // ✅ ONLY ABORT IF TRANSACTION IS ACTIVE
-    if (session && transactionStarted) {
-      try {
-        await session.abortTransaction();
-        console.log("⚠️ Transaction aborted");
-      } catch (abortError) {
-        console.error("❌ Error aborting transaction:", abortError.message);
-      }
-    }
-
-    res.status(400).json({
-      success: false,
-      message: error.message || "Lỗi khi tạo sản phẩm",
-    });
-  } finally {
-    // ✅ ALWAYS END SESSION
-    if (session) {
-      await session.endSession();
-      console.log("🔴 Session ended");
-    }
-  }
-};
-
-// ============================================
-// FIND ALL PRODUCTS - ✅ ENHANCED LOGGING
-// ============================================
-// ============================================
-// FIND ALL PRODUCTS - ✅ COMPLETELY FIXED
+// ✅ FIXED: FIND ALL PRODUCTS - PROPER POPULATION
 // ============================================
 export const findAllDynamicProducts = async (req, res) => {
   try {
@@ -468,6 +271,197 @@ export const findAllDynamicProducts = async (req, res) => {
     });
   }
 };
+
+// ============================================
+// CREATE PRODUCT
+// ============================================
+export const createDynamicProduct = async (req, res) => {
+  const { category } = req.params;
+  let session = null;
+  let transactionStarted = false;
+
+  try {
+    console.log("🔵 START: Create dynamic product for category:", category);
+
+    const categoryDoc = await Category.findOne({ slug: category });
+    if (!categoryDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Category không tồn tại",
+      });
+    }
+
+    const {
+      createVariants,
+      variants,
+      slug: frontendSlug,
+      ...productData
+    } = req.body;
+
+    if (!productData.name?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Tên sản phẩm là bắt buộc",
+      });
+    }
+    if (!productData.model?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Model là bắt buộc",
+      });
+    }
+    if (!productData.createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: "createdBy là bắt buộc",
+      });
+    }
+
+    const finalSlug =
+      frontendSlug?.trim() || createSlug(productData.model.trim());
+    if (!finalSlug) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể tạo slug từ model",
+      });
+    }
+
+    const ProductModel = await getOrCreateModel(categoryDoc.name);
+    const VariantModel = await getOrCreateModel(categoryDoc.name, true);
+
+    const existingBySlug = await ProductModel.findOne({
+      $or: [{ slug: finalSlug }, { baseSlug: finalSlug }],
+    });
+
+    if (existingBySlug) {
+      return res.status(400).json({
+        success: false,
+        message: `Slug đã tồn tại: ${finalSlug}`,
+      });
+    }
+
+    session = await mongoose.startSession();
+    session.startTransaction();
+    transactionStarted = true;
+    console.log("✅ Transaction started");
+
+    const product = new ProductModel({
+      name: productData.name.trim(),
+      model: productData.model.trim(),
+      slug: finalSlug,
+      baseSlug: finalSlug,
+      description: productData.description?.trim() || "",
+      specifications: productData.specifications || {},
+      condition: productData.condition || "NEW",
+      brand: productData.brand || "Apple",
+      category: categoryDoc.name,
+      productType: categoryDoc.name,
+      status: productData.status || "AVAILABLE",
+      installmentBadge: productData.installmentBadge || "NONE",
+      createdBy: productData.createdBy,
+      featuredImages: productData.featuredImages || [],
+      videoUrl: productData.videoUrl?.trim() || "",
+      averageRating: 0,
+      totalReviews: 0,
+      salesCount: 0,
+      variants: [],
+    });
+
+    await product.save({ session });
+    console.log("✅ Product saved:", product._id);
+
+    const variantGroups = createVariants || variants || [];
+    const createdVariantIds = [];
+
+    if (variantGroups.length > 0) {
+      for (const group of variantGroups) {
+        const { color, images = [], options = [] } = group;
+        if (!color?.trim() || !Array.isArray(options) || options.length === 0)
+          continue;
+
+        for (const opt of options) {
+          if (!opt.variantName?.trim()) continue;
+
+          const sku = await getNextSku();
+          const variantSlug = `${finalSlug}-${createSlug(
+            opt.variantName.trim()
+          )}`;
+
+          const variantDoc = new VariantModel({
+            productId: product._id,
+            color: color.trim(),
+            variantName: opt.variantName.trim(),
+            originalPrice: Number(opt.originalPrice) || 0,
+            price: Number(opt.price) || 0,
+            stock: Number(opt.stock) || 0,
+            images: images.filter((img) => img?.trim()),
+            sku,
+            slug: variantSlug,
+            specs: opt.specs || {},
+          });
+
+          await variantDoc.save({ session });
+          createdVariantIds.push(variantDoc._id);
+          console.log("✅ Variant saved:", variantDoc._id);
+        }
+      }
+
+      product.variants = createdVariantIds;
+      await product.save({ session });
+      console.log("✅ Product updated with variant IDs");
+    }
+
+    await session.commitTransaction();
+    transactionStarted = false;
+    console.log("✅ Transaction committed successfully");
+
+    // ✅ POPULATE AFTER COMMIT
+    const User = mongoose.model("User");
+    const populated = await ProductModel.findById(product._id).lean();
+
+    if (populated.variants && populated.variants.length > 0) {
+      populated.variants = await VariantModel.find({
+        _id: { $in: populated.variants },
+      }).lean();
+    }
+
+    if (populated.createdBy) {
+      populated.createdBy = await User.findById(populated.createdBy)
+        .select("fullName email")
+        .lean();
+    }
+
+    console.log("✅ Product created successfully:", populated._id);
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo sản phẩm thành công",
+      data: { product: populated },
+    });
+  } catch (error) {
+    console.error("❌ CREATE ERROR:", error);
+
+    if (session && transactionStarted) {
+      try {
+        await session.abortTransaction();
+        console.log("⚠️ Transaction aborted");
+      } catch (abortError) {
+        console.error("❌ Error aborting transaction:", abortError.message);
+      }
+    }
+
+    res.status(400).json({
+      success: false,
+      message: error.message || "Lỗi khi tạo sản phẩm",
+    });
+  } finally {
+    if (session) {
+      await session.endSession();
+      console.log("🔴 Session ended");
+    }
+  }
+};
+
 // ============================================
 // GET PRODUCT DETAIL
 // ============================================
@@ -485,22 +479,35 @@ export const getDynamicProductDetail = async (req, res) => {
       });
     }
 
-    const ProductModel = getOrCreateModel(categoryDoc.name);
-    const VariantModel = getOrCreateModel(categoryDoc.name, true);
+    const ProductModel = await getOrCreateModel(categoryDoc.name);
+    const VariantModel = await getOrCreateModel(categoryDoc.name, true);
 
-    let variant = await VariantModel.findOne({ slug });
+    let variant = await VariantModel.findOne({ slug }).lean();
     let product = null;
 
     if (variant) {
-      product = await ProductModel.findById(variant.productId)
-        .populate("variants")
-        .populate("createdBy", "fullName email");
+      product = await ProductModel.findById(variant.productId).lean();
 
       if (!product) {
         return res.status(404).json({
           success: false,
           message: "Không tìm thấy sản phẩm",
         });
+      }
+
+      // Populate variants
+      if (product.variants && product.variants.length > 0) {
+        product.variants = await VariantModel.find({
+          _id: { $in: product.variants },
+        }).lean();
+      }
+
+      // Populate user
+      if (product.createdBy) {
+        const User = mongoose.model("User");
+        product.createdBy = await User.findById(product.createdBy)
+          .select("fullName email")
+          .lean();
       }
 
       if (skuQuery) {
@@ -510,15 +517,30 @@ export const getDynamicProductDetail = async (req, res) => {
     } else {
       product = await ProductModel.findOne({
         $or: [{ baseSlug: slug }, { slug: slug }],
-      })
-        .populate("variants")
-        .populate("createdBy", "fullName email");
+      }).lean();
 
       if (!product) {
         return res.status(404).json({
           success: false,
           message: "Không tìm thấy sản phẩm",
         });
+      }
+
+      // Populate variants
+      if (product.variants && product.variants.length > 0) {
+        product.variants = await VariantModel.find({
+          _id: { $in: product.variants },
+        }).lean();
+      } else {
+        product.variants = [];
+      }
+
+      // Populate user
+      if (product.createdBy) {
+        const User = mongoose.model("User");
+        product.createdBy = await User.findById(product.createdBy)
+          .select("fullName email")
+          .lean();
       }
 
       const variants = product.variants || [];

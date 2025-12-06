@@ -1,4 +1,4 @@
-// frontend/src/pages/warehouse/ProductsPage.jsx
+// frontend/src/pages/warehouse/ProductsPage.jsx - FIXED VERSION
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
@@ -26,14 +26,7 @@ import {
 import { Loading } from "@/components/shared/Loading";
 import ProductCard from "@/components/shared/ProductCard";
 import ProductEditModal from "@/components/shared/ProductEditModal";
-import CSVImporter from "@/components/shared/CSVImporter";
-import { Label } from "@/components/ui/label";
 import { isFixedCategory } from "@/lib/categoryHelpers";
-import {
-  extractProductsArray,
-  extractTotal,
-  debugAPIResponse,
-} from "@/lib/apiDebugHelper";
 
 // ============================================
 // API MAPPING - FIXED CATEGORIES ONLY
@@ -47,7 +40,7 @@ const FIXED_API_MAP = {
   Accessories: accessoryAPI,
 };
 
-// ✅ DYNAMIC API CREATOR
+// ✅ DYNAMIC API CREATOR - IMPROVED
 const createDynamicAPI = (categorySlug) => {
   const BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -72,13 +65,21 @@ const createDynamicAPI = (categorySlug) => {
   return {
     async getAll(params) {
       const queryString = new URLSearchParams(params).toString();
-      const response = await fetch(
-        `${BASE_URL}/categories/${categorySlug}/products?${queryString}`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error("Failed to fetch products");
-      return response.json();
+      const url = `${BASE_URL}/categories/${categorySlug}/products?${queryString}`;
+      console.log("🔵 Dynamic API GET:", url);
+
+      const response = await fetch(url, { headers: getAuthHeaders() });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("📦 Dynamic API Response:", data);
+
+      return data;
     },
+
     async create(data) {
       const response = await fetch(
         `${BASE_URL}/categories/${categorySlug}/products`,
@@ -91,6 +92,7 @@ const createDynamicAPI = (categorySlug) => {
       if (!response.ok) throw new Error("Failed to create product");
       return response.json();
     },
+
     async update(id, data) {
       const response = await fetch(
         `${BASE_URL}/categories/${categorySlug}/products/${id}`,
@@ -103,6 +105,7 @@ const createDynamicAPI = (categorySlug) => {
       if (!response.ok) throw new Error("Failed to update product");
       return response.json();
     },
+
     async delete(id) {
       const response = await fetch(
         `${BASE_URL}/categories/${categorySlug}/products/${id}`,
@@ -136,11 +139,6 @@ const ProductsPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [currentMode, setCurrentMode] = useState(null);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [justCreatedProductId, setJustCreatedProductId] = useState(null);
-  const [addMode, setAddMode] = useState("normal");
-  const [showJsonForm, setShowJsonForm] = useState(false);
-  const [jsonInput, setJsonInput] = useState("");
-  const [showCSVImporter, setShowCSVImporter] = useState(false);
 
   const LIMIT = 12;
 
@@ -167,7 +165,7 @@ const ProductsPage = () => {
     if (categories.length > 0) {
       fetchProducts();
     }
-  }, [activeTab, page, searchQuery, justCreatedProductId, categories]);
+  }, [activeTab, page, searchQuery, categories]);
 
   useEffect(() => {
     setPage(1);
@@ -232,7 +230,7 @@ const ProductsPage = () => {
   };
 
   // ============================================
-  // FETCH PRODUCTS - ✅ IMPROVED WITH DEBUG HELPER
+  // ✅ IMPROVED: FETCH PRODUCTS WITH BETTER ERROR HANDLING
   // ============================================
   const fetchProducts = async () => {
     setIsLoading(true);
@@ -248,59 +246,45 @@ const ProductsPage = () => {
         search: searchQuery || undefined,
       });
 
-      // ✅ DEBUG RESPONSE
-      debugAPIResponse(`GET /categories/${activeTab}/products`, response, {
-        requireSuccess: true,
-        requireData: true,
-        requiredFields: ["products", "total"],
-      });
+      console.log("📦 Fetch response:", response);
 
       // ✅ CHECK SUCCESS FLAG
       if (response.success === false) {
         throw new Error(response.message || "Không thể tải sản phẩm");
       }
 
-      // ✅ USE HELPER TO EXTRACT DATA
-      const productsList = extractProductsArray(response);
-      const totalCount = extractTotal(response, true);
+      // ✅ EXTRACT DATA - Handle different response structures
+      let productsList = [];
+      let totalCount = 0;
+
+      // Try different paths
+      if (response.data?.data?.products) {
+        productsList = response.data.data.products;
+        totalCount = response.data.data.total || 0;
+      } else if (response.data?.products) {
+        productsList = response.data.products;
+        totalCount = response.data.total || 0;
+      } else if (Array.isArray(response.data)) {
+        productsList = response.data;
+        totalCount = response.data.length;
+      } else if (Array.isArray(response)) {
+        productsList = response;
+        totalCount = response.length;
+      }
 
       console.log("✅ Extracted:", {
         products: productsList.length,
         total: totalCount,
       });
 
-      const sortedByDate = [...productsList].sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      );
-      const top10NewIds = sortedByDate.slice(0, 10).map((p) => p._id);
-
-      let top10SellerIds = [];
-      try {
-        const res = await analyticsAPI.getTopSellers(activeTab, 10);
-        top10SellerIds = res.data.data.map((s) => s.productId);
-      } catch (err) {
-        console.warn("Top seller không có dữ liệu");
-      }
-
+      // Add category info
       const productsWithFlags = productsList.map((p) => ({
         ...p,
-        isTopNew: top10NewIds.includes(p._id),
-        isTopSeller: top10SellerIds.includes(p._id),
         category: activeTab,
       }));
 
       setProducts(productsWithFlags);
       setTotal(totalCount);
-
-      if (justCreatedProductId) {
-        const newProduct = productsWithFlags.find(
-          (p) => p._id === justCreatedProductId
-        );
-        if (newProduct) {
-          handleEdit(newProduct);
-          setJustCreatedProductId(null);
-        }
-      }
     } catch (error) {
       console.error("❌ Fetch products error:", error);
       toast.error(error.message || "Lỗi tải sản phẩm");
@@ -314,18 +298,10 @@ const ProductsPage = () => {
   // ============================================
   // CRUD OPERATIONS
   // ============================================
-  const handleCreate = (mode) => {
-    setAddMode(mode);
-    if (mode === "json") {
-      setJsonInput("");
-      setShowJsonForm(true);
-    } else if (mode === "csv") {
-      setShowCSVImporter(true);
-    } else {
-      setCurrentMode("create");
-      setCurrentProduct(null);
-      setShowModal(true);
-    }
+  const handleCreate = () => {
+    setCurrentMode("create");
+    setCurrentProduct(null);
+    setShowModal(true);
   };
 
   const handleEdit = (product) => {
@@ -369,62 +345,6 @@ const ProductsPage = () => {
     }
   };
 
-  const getCreatedBy = () => {
-    const authStorage = localStorage.getItem("auth-storage");
-    if (authStorage) {
-      try {
-        const { state } = JSON.parse(authStorage);
-        return state?.user?._id || state?.user?.id;
-      } catch (error) {
-        console.error("❌ Error parsing auth-storage:", error);
-      }
-    }
-    return null;
-  };
-
-  const handleSubmitJson = async (e) => {
-    e.preventDefault();
-
-    let payload;
-    try {
-      const rawData = JSON.parse(jsonInput);
-
-      payload = {
-        ...rawData,
-        createdBy: getCreatedBy(),
-        category: activeTab,
-        condition: rawData.condition || "NEW",
-        status: rawData.status || "AVAILABLE",
-        installmentBadge: rawData.installmentBadge || "NONE",
-      };
-
-      if (!payload.name?.trim()) throw new Error("Tên sản phẩm bắt buộc");
-      if (!payload.model?.trim()) throw new Error("Model bắt buộc");
-      if (!payload.variants?.length) throw new Error("Cần ít nhất 1 variant");
-
-      console.log("✅ JSON PAYLOAD:", JSON.stringify(payload, null, 2));
-    } catch (error) {
-      toast.error("JSON không hợp lệ: " + error.message);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const api = getAPI();
-      const response = await api.create(payload);
-      const newId = response?.data?._id || response?.data?.id;
-      toast.success("Tạo sản phẩm thành công!");
-      setShowJsonForm(false);
-      setJustCreatedProductId(newId);
-      fetchProducts();
-    } catch (error) {
-      console.error("❌ ERROR:", error);
-      toast.error(error.message || "Lưu sản phẩm thất bại");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const filteredProducts = products.filter(
     (product) =>
       product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -445,21 +365,9 @@ const ProductsPage = () => {
             Quản lý sản phẩm theo từng danh mục ({categories.length} categories)
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={addMode} onValueChange={setAddMode}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Chọn kiểu thêm" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">Bình thường</SelectItem>
-              <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="csv">CSV</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={() => handleCreate(addMode)}>
-            <Plus className="w-4 h-4 mr-2" /> Thêm sản phẩm
-          </Button>
-        </div>
+        <Button onClick={handleCreate}>
+          <Plus className="w-4 h-4 mr-2" /> Thêm sản phẩm
+        </Button>
       </div>
 
       {/* CATEGORY TABS */}
@@ -520,12 +428,8 @@ const ProductsPage = () => {
                     <div key={product._id} className="relative group">
                       <ProductCard
                         product={product}
-                        isTopNew={product.isTopNew}
-                        isTopSeller={product.isTopSeller}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
-                        onUpdate={() => fetchProducts()}
-                        showVariantsBadge={true}
                         showAdminActions={isAdmin}
                       />
                     </div>
@@ -564,94 +468,14 @@ const ProductsPage = () => {
         ))}
       </Tabs>
 
-      {/* MODALS */}
-      {showJsonForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h2 className="text-2xl font-bold">
-                Thêm sản phẩm mới bằng JSON - {activeTab}
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowJsonForm(false)}
-              >
-                ✕
-              </Button>
-            </div>
-
-            <form onSubmit={handleSubmitJson}>
-              <div className="p-6">
-                <div className="space-y-2">
-                  <Label>Nhập JSON sản phẩm</Label>
-                  <textarea
-                    value={jsonInput}
-                    onChange={(e) => setJsonInput(e.target.value)}
-                    rows={20}
-                    className="w-full px-3 py-2 border rounded-md font-mono"
-                    placeholder="Nhập JSON ở đây..."
-                  />
-                </div>
-              </div>
-
-              <div className="p-6 border-t flex justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowJsonForm(false)}
-                >
-                  Hủy
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Đang lưu..." : "Tạo mới"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showCSVImporter && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">
-                Import từ CSV - {activeTab}
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCSVImporter(false)}
-              >
-                ✕
-              </Button>
-            </div>
-
-            <CSVImporter
-              category={activeTab}
-              api={getAPI()}
-              onSuccess={() => {
-                setShowCSVImporter(false);
-                fetchProducts();
-              }}
-            />
-          </div>
-        </div>
-      )}
-
+      {/* PRODUCT EDIT MODAL */}
       <ProductEditModal
         open={showModal}
         onOpenChange={setShowModal}
         mode={currentMode}
         category={activeTab}
         product={currentProduct}
-        onSave={(newId) => {
-          fetchProducts();
-          if (currentMode === "create" && newId) {
-            setJustCreatedProductId(newId);
-          }
-        }}
+        onSave={() => fetchProducts()}
       />
     </div>
   );

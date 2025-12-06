@@ -1,6 +1,6 @@
 // ============================================
 // FILE: src/store/cartStore.js
-// FIXED: Dùng Array thay Set cho selectedForCheckout → Checkout hoạt động
+// ✅ FIXED: Support dynamic categories by removing hardcoded validation
 // ============================================
 
 import { create } from "zustand";
@@ -11,9 +11,8 @@ export const useCartStore = create((set, get) => ({
   isLoading: false,
   error: null,
 
-  // === DÙNG ARRAY THAY VÌ SET ===
-  selectedForCheckout: [], // ← Mảng các variantId được chọn
-  lastAddedItem: null, // { variantId, timestamp }
+  selectedForCheckout: [],
+  lastAddedItem: null,
 
   // Get cart
   getCart: async () => {
@@ -26,7 +25,9 @@ export const useCartStore = create((set, get) => ({
     }
   },
 
-  // Add to cart
+  // ============================================
+  // ✅ FIXED: Add to cart - Support dynamic categories
+  // ============================================
   addToCart: async (variantId, quantity = 1, productType) => {
     console.log("cartStore.addToCart called:", {
       variantId,
@@ -38,6 +39,7 @@ export const useCartStore = create((set, get) => ({
       },
     });
 
+    // ✅ VALIDATION 1: variantId must exist
     if (!variantId) {
       console.error("variantId is missing or invalid:", variantId);
       const message = "Thiếu variantId";
@@ -45,6 +47,7 @@ export const useCartStore = create((set, get) => ({
       return { success: false, message };
     }
 
+    // ✅ VALIDATION 2: productType must exist
     if (!productType) {
       console.error("productType is missing:", productType);
       const message = "Thiếu productType";
@@ -52,20 +55,21 @@ export const useCartStore = create((set, get) => ({
       return { success: false, message };
     }
 
-    const validTypes = [
-      "iPhone",
-      "iPad",
-      "Mac",
-      "AirPods",
-      "AppleWatch",
-      "Accessory",
-    ];
-    if (!validTypes.includes(productType)) {
-      console.error("Invalid productType:", productType, "Valid:", validTypes);
-      const message = `productType không hợp lệ: ${productType}`;
+    // ✅ VALIDATION 3: productType must be a string
+    if (typeof productType !== "string" || productType.trim().length === 0) {
+      console.error("Invalid productType format:", productType);
+      const message = "productType không hợp lệ";
       set({ error: message, isLoading: false });
       return { success: false, message };
     }
+
+    // ❌ REMOVED: Hardcoded productType validation
+    // OLD CODE:
+    // const validTypes = ['iPhone', 'iPad', 'Mac', 'AirPods', 'AppleWatch', 'Accessory'];
+    // if (!validTypes.includes(productType)) { ... }
+
+    // ✅ NEW: Accept any productType from database
+    console.log("✅ productType accepted:", productType);
 
     set({ isLoading: true, error: null });
 
@@ -75,14 +79,16 @@ export const useCartStore = create((set, get) => ({
         quantity,
         productType,
       });
+
       const response = await cartAPI.addToCart({
         variantId,
         quantity,
         productType,
       });
+
       console.log("cartAPI response:", response);
 
-      // ✅ LƯU THÔNG TIN SẢN PHẨM VỪA THÊM
+      // ✅ Save info about just-added item
       set({
         cart: response.data.data,
         isLoading: false,
@@ -103,7 +109,7 @@ export const useCartStore = create((set, get) => ({
   },
 
   // ============================================
-  // UPDATE CART ITEM - FIXED
+  // UPDATE CART ITEM
   // ============================================
   updateCartItem: async (itemId, quantity) => {
     if (!itemId || quantity < 0) {
@@ -155,7 +161,7 @@ export const useCartStore = create((set, get) => ({
   },
 
   // ============================================
-  // REMOVE FROM CART - FIXED
+  // REMOVE FROM CART
   // ============================================
   removeFromCart: async (itemId) => {
     if (!itemId) {
@@ -242,14 +248,11 @@ export const useCartStore = create((set, get) => ({
     });
   },
 
-  // === SET DANH SÁCH ĐÃ CHỌN – DÙNG ARRAY ===
   setSelectedForCheckout: (variantIds = []) => {
-    // Đảm bảo luôn là mảng
     const ids = Array.isArray(variantIds) ? variantIds : [];
     set({ selectedForCheckout: ids });
   },
 
-  // === LẤY TỔNG TIỀN CHỈ CÁC SẢN PHẨM ĐƯỢC CHỌN ===
   getSelectedTotal: () => {
     const { cart, selectedForCheckout } = get();
     if (!cart?.items || selectedForCheckout.length === 0) return 0;
@@ -259,7 +262,6 @@ export const useCartStore = create((set, get) => ({
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
   },
 
-  // === LẤY DANH SÁCH SẢN PHẨM ĐƯỢC CHỌN ===
   getSelectedItems: () => {
     const { cart, selectedForCheckout } = get();
     if (!cart?.items || selectedForCheckout.length === 0) return [];
@@ -271,12 +273,11 @@ export const useCartStore = create((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  // Thêm helper function kiểm tra thời gian
   shouldAutoSelect: () => {
     const { lastAddedItem } = get();
     if (!lastAddedItem) return null;
 
-    const EIGHT_HOURS = 8 * 60 * 60 * 1000; // 8 giờ tính bằng milliseconds
+    const EIGHT_HOURS = 8 * 60 * 60 * 1000;
     const now = Date.now();
 
     if (now - lastAddedItem.timestamp <= EIGHT_HOURS) {
