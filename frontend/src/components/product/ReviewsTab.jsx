@@ -236,9 +236,9 @@ export const ReviewsTab = ({ productId, product }) => {
                   />
                 ))}
               </div>
-              {/* <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600">
                 {product.totalReviews || 0} lượt đánh giá
-              </p> */}
+              </p>
             </div>
 
             <div className="space-y-2 mb-6">
@@ -379,10 +379,56 @@ export const ReviewsTab = ({ productId, product }) => {
               <h3 className="font-bold text-lg mb-4">Viết đánh giá của bạn</h3>
 
               {/* Order Selection */}
-            
+              {availableOrders.length > 1 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">
+                    Chọn đơn hàng <span className="text-red-600">*</span>
+                  </label>
+                  <Select
+                    value={selectedOrderId}
+                    onValueChange={setSelectedOrderId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn đơn hàng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableOrders.map((order) => (
+                        <SelectItem key={order._id} value={order._id}>
+                          <div className="flex items-center justify-between gap-3 w-full">
+                            <div className="flex items-center gap-2">
+                              <ShoppingBag className="w-4 h-4" />
+                              <span>{order.orderNumber}</span>
+                            </div>
+                            <Badge variant="secondary" className="text-xs">
+                              {order.reviewCount}/20 đánh giá
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Mỗi đơn hàng có thể đánh giá tối đa 20 lần
+                  </p>
+                </div>
+              )}
 
               {/* Single Order Info */}
-              
+              {availableOrders.length === 1 && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4 text-gray-600" />
+                      <span className="font-medium">
+                        {availableOrders[0].orderNumber}
+                      </span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {availableOrders[0].reviewCount}/20 đánh giá
+                    </Badge>
+                  </div>
+                </div>
+              )}
 
               {/* Rating */}
               <div className="mb-4">
