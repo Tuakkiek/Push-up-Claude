@@ -57,10 +57,11 @@ const DashboardLayout = () => {
       items.push(
         { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
         { path: "/admin/employees", icon: Users, label: "Quản lý nhân viên" },
+        { path: "/admin/categories", icon: Package, label: "Danh mục sản phẩm" },
         { path: "/admin/promotions", icon: Tag, label: "Khuyến mãi" },
         { path: "/admin/homepage-editor", icon: Layout, label: "Giao diện trang chủ" },
         { path: "/admin/short-videos", icon: Video, label: "Video ngắn" },
-        { path: "/warehouse/products", icon: Package, label: "Sản phẩm" },
+        { path: "/warehouse/products", icon: Package, label: "Quản lý kho (WMS)" },
         { path: "/order-manager/orders", icon: ShoppingBag, label: "Đơn hàng" },
         { path: "/shipper/dashboard", icon: Truck, label: "Giao hàng" },
         { path: "/pos/dashboard", icon: Receipt, label: "POS - Bán hàng" },

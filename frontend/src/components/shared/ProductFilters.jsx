@@ -1,299 +1,179 @@
-import React, { useState, useEffect } from "react";
-import { SlidersHorizontal, ChevronDown, X, Check } from "lucide-react";
+// frontend/src/components/shared/ProductFilters.jsx
 
-// ============================================
-// CONSTANTS & CONFIG
-// ============================================
-export const PRICE_RANGES = [
-  { label: "Dưới 5 triệu", min: 0, max: 5000000 },
-  { label: "5 - 10 triệu", min: 5000000, max: 10000000 },
-  { label: "10 - 15 triệu", min: 10000000, max: 15000000 },
-  { label: "15 - 20 triệu", min: 15000000, max: 20000000 },
-  { label: "20 - 30 triệu", min: 20000000, max: 30000000 },
-  { label: "Trên 30 triệu", min: 30000000, max: Infinity },
-];
+import React from "react";
+import { ChevronDown, Check, X } from "lucide-react";
 
-export const FILTER_LABELS = {
-  category: "Danh mục",
-  storage: "Dung lượng",
-  ram: "RAM",
-  connectivity: "Kết nối",
-  condition: "Tình trạng",
-  color: "Màu sắc",
-};
-
-export const CONDITION_LABELS = {
-  NEW: "Mới 100%",
-  LIKE_NEW: "Like New (99%)",
-};
-
-export const CATEGORY_DISPLAY = {
-  iPhone: "iPhone",
-  iPad: "iPad",
-  Mac: "MacBook",
-  AirPods: "AirPods",
-  AppleWatch: "Apple Watch",
-  Accessories: "Phụ kiện",
-};
-
-const ALL_CATEGORIES = Object.keys(CATEGORY_DISPLAY);
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const ProductFilters = ({
   filters,
   onFilterChange,
   priceRange,
   onPriceChange,
-  availableFilters,
-  onClearFilters,
   activeFiltersCount,
-  className = "",
-  currentCategory,
-  onCategoryChange,
-  hideCategory = false, // Prop cũ vẫn giữ để tương thích
-  isCategoryPage = false, // Prop mới: đang ở trang danh mục riêng (ví dụ: /products?category=iPhone)
+  onClearFilters,
+  currentCategory, // Category Object
+  // hideCategory, // Is this needed?
+  // isCategoryPage, // Is this needed?
+  // onCategoryChange, // Handler if category switching is allowed
 }) => {
-  const [expandedSections, setExpandedSections] = useState({});
-  const [selectedPricePreset, setSelectedPricePreset] = useState(null);
-
-  // ============================================
-  // TỰ ĐỘNG ẨN DANH MỤC KHI ĐANG Ở TRANG DANH MỤC RIÊNG
-  // ============================================
-  const shouldHideCategory = hideCategory || isCategoryPage;
-
-  // Mở rộng các section khi có dữ liệu filter mới
-  useEffect(() => {
-    setExpandedSections((prev) => {
-      const next = { ...prev };
-
-      // Danh mục (nếu không bị ẩn)
-      if (!shouldHideCategory) next.category = true;
-
-      // Giá luôn mở
-      next.price = true;
-
-      // Các filter động
-      Object.keys(availableFilters).forEach((key) => {
-        if (next[key] === undefined) next[key] = true;
-      });
-
-      return next;
-    });
-  }, [availableFilters, shouldHideCategory]);
-
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+  
+  // Extract dynamic filters from schema or config
+  // Ideally, currentCategory.specSchema and currentCategory.variantSchema define what's possible.
+  // For simplicity, we can inspect unique values from the products if we had them, OR use schema options.
+  
+  // Filterable fields derivation:
+  // 1. Variant attributes (Storage, Color, Connectivity, RAM, etc.)
+  // 2. Spec attributes (Screen Size, etc - usually hard to filter unless discrete options)
+  
+  // Let's assume schema has 'options' for select fields, we can use those as filters.
+  
+  const generateFilterSections = () => {
+    if (!currentCategory) return [];
+    
+    const sections = [];
+    
+    // 1. Variants Schema
+    if (currentCategory.variantSchema) {
+        Object.entries(currentCategory.variantSchema).forEach(([key, field]) => {
+            if (field.type === 'select' && field.options?.length > 0) {
+                sections.push({
+                    id: key,
+                    label: field.label,
+                    options: field.options
+                });
+            }
+        });
+    }
+    
+    // 2. Specs Schema (if marked filterable or just all selects?)
+    // Let's include Selects from Specs too
+    if (currentCategory.specSchema) {
+        Object.entries(currentCategory.specSchema).forEach(([key, field]) => {
+             // Only filter meaningful fields (avoid huge lists if generic)
+             // For now, let's filter if it has 'options' which means it's a constrained choice
+            if (field.type === 'select' && field.options?.length > 0) {
+                sections.push({
+                    id: key,
+                    label: field.label,
+                    options: field.options
+                });
+            }
+        });
+    }
+    
+    return sections;
   };
 
-  const handlePricePresetClick = (preset) => {
-    setSelectedPricePreset(preset.label);
-    onPriceChange({
-      min: preset.min === 0 ? "" : preset.min.toString(),
-      max: preset.max === Infinity ? "" : preset.max.toString(),
-    });
-  };
+  const filterSections = generateFilterSections();
 
-  const formatPrice = (price) => new Intl.NumberFormat("vi-VN").format(price);
+  // Price Presets
+//   const pricePresets = [
+//     { label: "Dưới 10 triệu", min: 0, max: 10000000 },
+//     { label: "10 - 20 triệu", min: 10000000, max: 20000000 },
+//     { label: "20 - 30 triệu", min: 20000000, max: 30000000 },
+//     { label: "Trên 30 triệu", min: 30000000, max: null },
+//   ];
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm p-4 ${className}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 pb-3 border-b">
-        <h2 className="font-semibold text-base flex items-center gap-2">
-          <SlidersHorizontal className="w-5 h-5" />
-          Bộ lọc
-        </h2>
+    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-lg">Bộ lọc tìm kiếm</h3>
         {activeFiltersCount > 0 && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClearFilters}
-            className="text-sm text-blue-600 hover:underline font-medium"
+            className="text-red-500 hover:bg-red-50 h-8 px-2"
           >
-            Xóa tất cả ({activeFiltersCount})
-          </button>
+            Xóa tất cả
+          </Button>
         )}
       </div>
 
-      {/* ================== DANH MỤC (chỉ hiển thị khi cần) ================== */}
-      {!shouldHideCategory && (
-        <div className="mb-5">
-          <button
-            onClick={() => toggleSection("category")}
-            className="flex items-center justify-between w-full mb-3 text-left"
-          >
-            <span className="font-semibold text-gray-800">Danh mục</span>
-            <ChevronDown
-              className={`w-5 h-5 transition-transform text-gray-500 ${
-                expandedSections.category ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-
-          {expandedSections.category && (
-            <div className="space-y-2 pl-1">
-              {ALL_CATEGORIES.map((cat) => {
-                const isCurrent = currentCategory === cat;
-
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => !isCurrent && onCategoryChange?.(cat)}
-                    className={`w-full text-left p-3 rounded-lg transition-all flex items-center justify-between
-                      ${
-                        isCurrent
-                          ? "bg-blue-50 border border-blue-300 text-blue-700 font-medium shadow-sm"
-                          : "hover:bg-gray-50 text-gray-700"
-                      }`}
-                  >
-                    <span className="text-sm font-medium">
-                      {CATEGORY_DISPLAY[cat] || cat}
-                    </span>
-                    {isCurrent && <Check className="w-5 h-5 text-blue-600" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div className="border-t mt-4 pt-1"></div>
-        </div>
-      )}
-
-      {/* ================== CÁC BỘ LỌC KHÁC (storage, ram, condition, ...) ================== */}
-      {Object.entries(availableFilters).map(([key, options]) => (
-        <div key={key} className="mb-5">
-          <button
-            onClick={() => toggleSection(key)}
-            className="flex items-center justify-between w-full mb-3 text-left"
-          >
-            <span className="font-medium text-gray-800">
-              {FILTER_LABELS[key] || key}
-            </span>
-            <ChevronDown
-              className={`w-5 h-5 transition-transform text-gray-500 ${
-                expandedSections[key] ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-
-          {expandedSections[key] && (
-            <div className="space-y-2 pl-1">
-              {options.map((opt) => {
-                const isChecked = filters[key]?.includes(opt) || false;
-
-                return (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => onFilterChange(key, opt)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">
-                      {key === "condition" ? CONDITION_LABELS[opt] || opt : opt}
-                    </span>
-                    {isChecked && (
-                      <Check className="w-4 h-4 text-blue-600 ml-auto" />
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          )}
-          <div className="border-t mt-4"></div>
-        </div>
-      ))}
-
-      {/* ================== KHOẢNG GIÁ ================== */}
-      <div className="mb-4">
-        <button
-          onClick={() => toggleSection("price")}
-          className="flex items-center justify-between w-full mb-3 text-left"
-        >
-          <span className="font-semibold text-gray-800">Khoảng giá</span>
-          <ChevronDown
-            className={`w-5 h-5 transition-transform text-gray-500 ${
-              expandedSections.price ? "rotate-180" : ""
-            }`}
-          />
-        </button>
-
-        {expandedSections.price && (
-          <div className="space-y-3 pl-1">
-            {/* Các mức giá cố định */}
-            <div className="space-y-2">
-              {PRICE_RANGES.map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => handlePricePresetClick(preset)}
-                  className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all
-                    ${
-                      selectedPricePreset === preset.label
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-50 hover:bg-gray-100 text-gray-700"
-                    }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Nhập giá tùy chỉnh */}
-            <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-3">
-                Nhập khoảng giá tùy chỉnh
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  placeholder="Từ (VNĐ)"
-                  value={priceRange.min || ""}
-                  onChange={(e) => {
-                    setSelectedPricePreset(null);
-                    onPriceChange({ ...priceRange, min: e.target.value });
-                  }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <input
-                  type="number"
-                  placeholder="Đến (VNĐ)"
-                  value={priceRange.max || ""}
-                  onChange={(e) => {
-                    setSelectedPricePreset(null);
-                    onPriceChange({ ...priceRange, max: e.target.value });
-                  }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <button
-                onClick={() => onPriceChange(priceRange)}
-                disabled={!priceRange.min && !priceRange.max}
-                className="w-full mt-3 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                Áp dụng giá
-              </button>
-
-              {/* Hiển thị giá đang lọc */}
-              {(priceRange.min || priceRange.max) && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-700 font-medium text-center">
-                  Đang lọc:{" "}
-                  {priceRange.min && priceRange.max
-                    ? `${formatPrice(priceRange.min)} - ${formatPrice(
-                        priceRange.max
-                      )}`
-                    : priceRange.min
-                    ? `Từ ${formatPrice(priceRange.min)}`
-                    : `Dưới ${formatPrice(priceRange.max)}`}
+      <Accordion type="multiple" defaultValue={['price', ...filterSections.map(s => s.id)]} className="w-full">
+        {/* PRICE FILTER */}
+        <AccordionItem value="price">
+          <AccordionTrigger className="text-base font-semibold py-3 hover:no-underline">
+            Khoảng giá
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              {/* Slider removed for simplicity or can be added back */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                    ₫
+                  </span>
+                  <input
+                    type="number"
+                    value={priceRange.min}
+                    onChange={(e) =>
+                      onPriceChange({ ...priceRange, min: e.target.value })
+                    }
+                    placeholder="Tối thiểu"
+                    className="w-full pl-6 pr-2 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
                 </div>
-              )}
+                <span className="text-gray-400">-</span>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                    ₫
+                  </span>
+                  <input
+                    type="number"
+                    value={priceRange.max}
+                    onChange={(e) =>
+                      onPriceChange({ ...priceRange, max: e.target.value })
+                    }
+                    placeholder="Tối đa"
+                    className="w-full pl-6 pr-2 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* DYNAMIC FILTERS */}
+        {filterSections.map((section) => (
+          <AccordionItem key={section.id} value={section.id}>
+            <AccordionTrigger className="text-base font-semibold py-3 hover:no-underline">
+              {section.label}
+            </AccordionTrigger>
+            <AccordionContent className="pt-2 pb-4">
+              <div className="space-y-2">
+                {section.options.map((option) => {
+                  const isSelected = filters[section.id]?.includes(option);
+                  return (
+                    <div key={option} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`${section.id}-${option}`}
+                        checked={isSelected}
+                        onCheckedChange={() => onFilterChange(section.id, option)}
+                      />
+                      <Label
+                        htmlFor={`${section.id}-${option}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {option}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
     </div>
   );
 };

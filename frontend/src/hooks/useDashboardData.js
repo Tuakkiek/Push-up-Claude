@@ -9,12 +9,7 @@ import {
   orderAPI,
   userAPI,
   promotionAPI,
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
+  productAPI,
 } from "@/lib/api";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "/api";
@@ -36,12 +31,7 @@ export const useDashboardData = (timeRange) => {
         ordersRes,
         deliveredRes,
         employeesRes,
-        iphonesRes,
-        ipadsRes,
-        macsRes,
-        airpodsRes,
-        applewatchesRes,
-        accessoriesRes,
+        productsRes,
         promotionsRes,
         employeeKPIRes, // ✅ NEW
       ] = await Promise.all([
@@ -53,12 +43,7 @@ export const useDashboardData = (timeRange) => {
           endDate,
         }), // Thêm tham số ngày
         userAPI.getAllEmployees(),
-        iPhoneAPI.getAll({ limit: 1000 }),
-        iPadAPI.getAll({ limit: 1000 }),
-        macAPI.getAll({ limit: 1000 }),
-        airPodsAPI.getAll({ limit: 1000 }),
-        appleWatchAPI.getAll({ limit: 1000 }),
-        accessoryAPI.getAll({ limit: 1000 }),
+        productAPI.getAll({ limit: 5000 }), // Fetch all products for stats
         promotionAPI.getAllPromotions(),
         axios.get(`${BASE_URL}/analytics/employee/kpi`, {
           params: { startDate, endDate },
@@ -72,12 +57,7 @@ export const useDashboardData = (timeRange) => {
         ordersRes,
         deliveredRes,
         employeesRes,
-        iphonesRes,
-        ipadsRes,
-        macsRes,
-        airpodsRes,
-        applewatchesRes,
-        accessoriesRes,
+        productsRes,
         promotionsRes,
         timeRange,
         employeeKPI: employeeKPIRes.data.data, // ✅ NEW
@@ -152,12 +132,7 @@ const processAllData = ({
   ordersRes,
   deliveredRes,
   employeesRes,
-  iphonesRes,
-  ipadsRes,
-  macsRes,
-  airpodsRes,
-  applewatchesRes,
-  accessoriesRes,
+  productsRes,
   promotionsRes,
   timeRange,
   employeeKPI, // ✅ NEW
@@ -205,36 +180,17 @@ const processAllData = ({
     (o) => o.status === "CANCELLED"
   ).length;
 
-  // Products data processing (giữ nguyên code cũ)
-  const iPhones = Array.isArray(iphonesRes?.data?.data?.products)
-    ? iphonesRes.data.data.products
-    : [];
-  const iPads = Array.isArray(ipadsRes?.data?.data?.products)
-    ? ipadsRes.data.data.products
-    : [];
-  const macs = Array.isArray(macsRes?.data?.data?.products)
-    ? macsRes.data.data.products
-    : Array.isArray(macsRes?.data)
-    ? macsRes.data
-    : [];
-  const airPods = Array.isArray(airpodsRes?.data?.data?.products)
-    ? airpodsRes.data.data.products
-    : [];
-  const watches = Array.isArray(applewatchesRes?.data?.data?.products)
-    ? applewatchesRes.data.data.products
-    : [];
-  const accessories = Array.isArray(accessoriesRes?.data?.data?.products)
-    ? accessoriesRes.data.data.products
+  // Products data processing
+  const allProducts = Array.isArray(productsRes?.data?.data?.products || productsRes?.data)
+    ? (productsRes?.data?.data?.products || productsRes?.data)
     : [];
 
-  const allProducts = [
-    ...iPhones,
-    ...iPads,
-    ...macs,
-    ...airPods,
-    ...watches,
-    ...accessories,
-  ];
+  const iPhones = allProducts.filter(p => p.category?.name === 'iPhone' || p.category === 'iPhone');
+  const iPads = allProducts.filter(p => p.category?.name === 'iPad' || p.category === 'iPad');
+  const macs = allProducts.filter(p => p.category?.name === 'Mac' || p.category === 'Mac');
+  const airPods = allProducts.filter(p => p.category?.name === 'AirPods' || p.category === 'AirPods');
+  const watches = allProducts.filter(p => p.category?.name === 'AppleWatch' || p.category === 'AppleWatch');
+  const accessories = allProducts.filter(p => p.category?.name === 'Accessories' || p.category === 'Accessory' || p.category === 'Accessories');
   const totalProducts = allProducts.length;
 
   // Stock and inventory (giữ nguyên)
@@ -273,11 +229,11 @@ const processAllData = ({
     return variants.every((v) => v.stock === 0);
   }).length;
 
-  // Category data (giữ nguyên)
+  // Category data
   const categoryStock = [
     {
       name: "iPhone",
-      products: iphonesRes?.data?.data?.total || 0,
+      products: iPhones.length,
       stock: iPhones.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),
@@ -295,7 +251,7 @@ const processAllData = ({
     },
     {
       name: "iPad",
-      products: ipadsRes?.data?.data?.total || 0,
+      products: iPads.length,
       stock: iPads.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),
@@ -313,7 +269,7 @@ const processAllData = ({
     },
     {
       name: "Mac",
-      products: macsRes?.data?.data?.total || macsRes?.data?.length || 0,
+      products: macs.length,
       stock: macs.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),
@@ -331,7 +287,7 @@ const processAllData = ({
     },
     {
       name: "AirPods",
-      products: airpodsRes?.data?.data?.total || 0,
+      products: airPods.length,
       stock: airPods.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),
@@ -349,7 +305,7 @@ const processAllData = ({
     },
     {
       name: "Watch",
-      products: applewatchesRes?.data?.data?.total || 0,
+      products: watches.length,
       stock: watches.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),
@@ -367,7 +323,7 @@ const processAllData = ({
     },
     {
       name: "Phụ kiện",
-      products: accessoriesRes?.data?.data?.total || 0,
+      products: accessories.length,
       stock: accessories.reduce(
         (sum, p) =>
           sum + (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0),

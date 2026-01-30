@@ -4,35 +4,74 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
+import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
 import config from "./config/config.js";
 import fs from "fs";
+import crypto from "crypto";
+import logger, { logEvent } from "./shared/infrastructure/logger.js";
 
 // ================================
-// 🔹 Import tất cả routes
+// 🔹 Import services
 // ================================
-import authRoutes from "./routes/authRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import cartRoutes from "./routes/cartRoutes.js";
-import orderRoutes from "./routes/orderRoutes.js";
-import reviewRoutes from "./routes/reviewRoutes.js";
-import promotionRoutes from "./routes/promotionRoutes.js";
+import { cancelExpiredVNPayOrders } from "./modules/sales/services/orderCleanupService.js";
 
-import iPhoneRoutes from "./routes/iPhoneRoutes.js";
-import iPadRoutes from "./routes/iPadRoutes.js";
-import macRoutes from "./routes/macRoutes.js";
-import airPodsRoutes from "./routes/airPodsRoutes.js";
-import appleWatchRoutes from "./routes/appleWatchRoutes.js";
-import accessoryRoutes from "./routes/accessoryRoutes.js";
-import productRoutes from "./routes/productRoutes.js";
-import analyticsRoutes from "./routes/analyticsRoutes.js";
-import salesRoutes from "./routes/salesRoutes.js";
-import posRoutes from "./routes/posRoutes.js";
-import homePageRoutes from "./routes/homePageRoutes.js";
-import vnpayRoutes from "./routes/vnpayRoutes.js";
-import { cancelExpiredVNPayOrders } from "./services/orderCleanupService.js";
-import searchRoutes from "./routes/searchRoutes.js";
-import shortVideoRoutes from "./routes/shortVideoRoutes.js";
+// ================================
+// 🔹 Dynamic Route Loading Helper
+// ================================
+const loadModuleRoutes = async () => {
+  const routes = [];
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const modulesPath = path.join(__dirname, 'modules');
+  
+  // Route mapping: filename -> API path
+  const routeMapping = {
+    'authRoutes.js': '/api/auth',
+    'userRoutes.js': '/api/users',
+    'cartRoutes.js': '/api/cart',
+    'orderRoutes.js': '/api/orders',
+    'reviewRoutes.js': '/api/reviews',
+    'promotionRoutes.js': '/api/promotions',
+    'catalogRoutes.js': '/api', // Unified Catalog Routes (serves /products, /categories)
+    'analyticsRoutes.js': '/api/analytics',
+    'salesRoutes.js': '/api/sales',
+    'posRoutes.js': '/api/pos',
+    'homePageRoutes.js': '/api/homepage',
+    'vnpayRoutes.js': '/api/payment/vnpay',
+    'searchRoutes.js': '/api/search',
+    'shortVideoRoutes.js': '/api/short-videos',
+    // WMS Module
+    'wmsRoutes.js': '/api/wms',
+    // Procurement Module
+    'procurementRoutes.js': '/api/procurement'
+  };
+
+  const modules = fs.readdirSync(modulesPath);
+  
+  for (const moduleName of modules) {
+    const routesDir = path.join(modulesPath, moduleName, 'routes');
+    if (!fs.existsSync(routesDir)) continue;
+    
+    const routeFiles = fs.readdirSync(routesDir).filter(f => f.endsWith('.js'));
+    
+    for (const routeFile of routeFiles) {
+      const apiPath = routeMapping[routeFile];
+      
+      if (apiPath) {
+        try {
+          const module = await import(`./modules/${moduleName}/routes/${routeFile}`);
+          routes.push({ path: apiPath, router: module.default });
+        } catch (err) {
+          console.error(`❌ FAILED TO LOAD ROUTE: ${routeFile} in module ${moduleName}`);
+          console.error(err);
+        }
+      }
+    }
+  }
+  
+  return routes;
+};
 
 dotenv.config();
 
@@ -71,6 +110,14 @@ createUploadDirs();
 // ================================
 // 🔹 Middleware
 // ================================
+
+// Attach a requestId to every request (can be overridden by frontend header)
+app.use((req, res, next) => {
+  const headerId = req.headers["x-request-id"];
+  req.requestId = (typeof headerId === "string" && headerId.trim()) || crypto.randomUUID();
+  next();
+});
+
 app.use(
   cors({
     origin: [
@@ -135,33 +182,13 @@ if (!process.env.VNP_TMN_CODE || !process.env.VNP_HASH_SECRET) {
 }
 
 // ================================
-// 🔹 Đăng ký tất cả routes
+// 🔹 Đăng ký tất cả routes (Dynamic)
 // ================================
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/reviews", reviewRoutes);
-app.use("/api/promotions", promotionRoutes);
-
-app.use("/api/products", productRoutes);
-app.use("/api/iphones", iPhoneRoutes);
-app.use("/api/ipads", iPadRoutes);
-app.use("/api/macs", macRoutes);
-app.use("/api/airpods", airPodsRoutes);
-app.use("/api/applewatches", appleWatchRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/accessories", accessoryRoutes);
-app.use("/api/sales", salesRoutes);
-app.use("/api/pos", posRoutes);
-
-app.use("/api/payment/vnpay", vnpayRoutes);
-
-app.use("/api/homepage", homePageRoutes);
-app.use("/api/search", searchRoutes);
-
-// ✅ SHORT VIDEOS ROUTE
-app.use("/api/short-videos", shortVideoRoutes);
+const routes = await loadModuleRoutes();
+routes.forEach(({ path, router }) => {
+  app.use(path, router);
+  console.log(`📍 Registered route: ${path}`);
+});
 
 // ================================
 // 🔹 Health Check Endpoint
@@ -199,7 +226,7 @@ app.use((err, req, res, next) => {
     });
   }
 
-  res.status(err.status || 500).json({
+  res.status(err.statusCode || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),

@@ -22,12 +22,7 @@ import {
 import { formatPrice } from "@/lib/utils";
 import ProductVariantSelector from "@/components/product/ProductVariantSelector";
 import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
+  productAPI,
   promotionAPI,
   posAPI,
 } from "@/lib/api";
@@ -189,33 +184,15 @@ const POSDashboard = () => {
   const fetchProducts = async () => {
     try {
       setIsLoading(true);
-      let response;
+      // Use Unified productAPI
+      // Note: We might need to ensure backend supports filtering by 'category' name/slug
+      // If selectedCategory matches the slug or name needed by backend
+      const response = await productAPI.getAll({ 
+        limit: 50, 
+        category: selectedCategory // Assuming backend filters by category slug/name
+      });
 
-      switch (selectedCategory) {
-        case "iPhone":
-          response = await iPhoneAPI.getAll({ limit: 50 });
-          break;
-        case "iPad":
-          response = await iPadAPI.getAll({ limit: 50 });
-          break;
-        case "Mac":
-          response = await macAPI.getAll({ limit: 50 });
-          break;
-        case "AirPods":
-          response = await airPodsAPI.getAll({ limit: 50 });
-          break;
-        case "AppleWatch":
-          response = await appleWatchAPI.getAll({ limit: 50 });
-          break;
-        case "Accessory":
-          response = await accessoryAPI.getAll({ limit: 50 });
-          break;
-        default:
-          response = await iPhoneAPI.getAll({ limit: 50 });
-      }
-
-      const productData =
-        response?.data?.data?.products || response?.data || [];
+      const productData = response?.data?.data?.products || [];
       setProducts(
         Array.isArray(productData)
           ? productData.map((p) => ({ ...p, category: selectedCategory }))

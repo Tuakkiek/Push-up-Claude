@@ -1,43 +1,45 @@
 // frontend/src/hooks/products/useProductForm.js
 
 import { useState, useEffect, useCallback } from "react";
-import { getEmptyFormData, emptyVariant } from "@/lib/productConstants";
+import { getEmptyFormData } from "@/lib/productConstants";
 
 /**
  * Hook quản lý state và các handler cơ bản cho ProductEditModal
  * @param {boolean} open - Modal có mở không
  * @param {boolean} isEdit - Chế độ chỉnh sửa hay tạo mới
- * @param {string} effectiveCategory - Danh mục sản phẩm
+ * @param {object|string} category - Category Object (với schema) hoặc category slug (legacy)
  * @param {object} product - Dữ liệu sản phẩm (nếu ở chế độ edit)
- * @returns {object} { formData, setFormData, handleBasicChange, handleSpecChange, handleColorChange, addColor, removeColor, handleCustomSpecChange, addCustomSpec, removeCustomSpec }
  */
-export const useProductForm = (open, isEdit, effectiveCategory, product) => {
+export const useProductForm = (open, isEdit, category, product) => {
   const [formData, setFormData] = useState(null);
 
-  // LOG để debug
+  // Helper to get effective category object if it's passed as object, or try to find it?
+  // Actually, we assume the parent component passes the full Category Object if possible.
+  // If 'category' is just a string (ID or slug), we might lack schema info here unless we fetch it.
+  // For now, let's assume 'category' PROP is the Full Category Object when available.
+  
+  // Initialize Form Data
   useEffect(() => {
-    console.log("🔍 useProductForm mounted:", {
-      open,
-      isEdit,
-      effectiveCategory,
-      productName: product?.name,
-    });
-  }, [open, isEdit, effectiveCategory, product]);
-
-  // Khởi tạo/Tải dữ liệu form
-  useEffect(() => {
-    if (!open || !effectiveCategory) {
-      return;
-    }
-
-    console.log("✅ Initializing form data for:", effectiveCategory);
+    if (!open) return;
 
     if (isEdit && product) {
+      console.log("✅ Initializing EDIT form for:", product.name);
+      
+      // Deep copy specs
       let specs = { ...product.specifications };
       if (!specs.colors || !Array.isArray(specs.colors)) {
         specs.colors = [];
       }
 
+      // Populate variants
+      // We don't need complex mapping if we trust the data structure matches the IO.
+      // But we need to ensure 'colorGroups' logic if the UI expects grouped variants by color.
+      // The UnifiedVariantsForm expects array of { color, images, options: [...] }
+      
+      // If the backend stores variants flattened, we might need to group them by color for the UI.
+      // Let's assume backend returns embedded variants array.
+      
+      // Grouping logic (similar to before, but generic)
       const colorGroups = {};
       const variants = Array.isArray(product.variants) ? product.variants : [];
 
@@ -53,31 +55,15 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
           };
         }
 
-        const option = {
-          sku: String(variant.sku || ""),
-          originalPrice: String(variant.originalPrice || ""),
-          price: String(variant.price || ""),
-          stock: String(variant.stock || ""),
-        };
-
-        // THÊM FIELD PHÙ HỢP THEO CATEGORY
-        if (effectiveCategory === "iPhone") {
-          option.storage = String(variant.storage || "");
-        } else if (effectiveCategory === "iPad") {
-          option.storage = String(variant.storage || "");
-          option.connectivity = String(variant.connectivity || "WIFI");
-        } else if (effectiveCategory === "Mac") {
-          option.cpuGpu = String(variant.cpuGpu || "");
-          option.ram = String(variant.ram || "");
-          option.storage = String(variant.storage || "");
-        } else if (
-          ["AirPods", "AppleWatch", "Accessories"].includes(effectiveCategory)
-        ) {
-          option.variantName = String(variant.variantName || "");
-          if (effectiveCategory === "AppleWatch") {
-            option.bandSize = String(variant.bandSize || "");
-          }
-        }
+        // Copy all variant fields
+        // We exclude specific UI fields like 'images' and 'color' from options to avoid duplication
+        const { images, color, _id, ...rest } = variant;
+        const option = { ...rest };
+        
+        // Ensure strings for inputs
+        Object.keys(option).forEach(key => {
+            if(option[key] === null || option[key] === undefined) option[key] = "";
+        });
 
         colorGroups[colorKey].options.push(option);
       });
@@ -85,7 +71,7 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
       const populatedVariants =
         Object.values(colorGroups).length > 0
           ? Object.values(colorGroups)
-          : [emptyVariant(effectiveCategory)];
+          : [];
 
       setFormData({
         name: String(product.name || ""),
@@ -102,88 +88,73 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
           ? [product.featuredImage]
           : [""],
         videoUrl: product.videoUrl || "",
+        category: product.category, // store Category ID
       });
     } else {
-      console.log("✅ Creating new product form");
+      console.log("✅ Creating NEW product form");
+      // New Product
+      const catId = typeof category === 'object' ? category?._id : category;
       setFormData({
-        ...getEmptyFormData(effectiveCategory),
+        ...getEmptyFormData(),
+        category: catId,
         installmentBadge: "NONE",
+        // Initialize one empty variant group
+        variants: [{
+            color: "",
+            images: [""],
+            options: [{
+                sku: "",
+                price: "",
+                originalPrice: "",
+                stock: ""
+                // dynamic fields added by Form Component based on Schema
+            }]
+        }]
       });
     }
-  }, [open, isEdit, effectiveCategory, product]);
+  }, [open, isEdit, product, category]);
 
-  // BASIC HANDLERS
+  // Handler for Basic Fields
   const handleBasicChange = useCallback((name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   }, []);
 
-  // SPEC HANDLERS
-  const handleSpecChange = useCallback(
-    (key, value) => {
-      if (effectiveCategory === "Accessories") return;
-      setFormData((prev) => ({
-        ...prev,
-        specifications: { ...prev.specifications, [key]: value },
-      }));
-    },
-    [effectiveCategory]
-  );
-
-  const handleColorChange = useCallback(
-    (idx, value) => {
-      const colors = [...(formData.specifications.colors || [""])];
-      colors[idx] = value;
-      setFormData((prev) => ({
-        ...prev,
-        specifications: { ...prev.specifications, colors },
-      }));
-    },
-    [formData]
-  );
-
-  const addColor = useCallback(() => {
-    const colors = [...(formData.specifications.colors || [""]), ""];
+  // Handler for Specifications
+  const handleSpecChange = useCallback((key, value) => {
     setFormData((prev) => ({
       ...prev,
-      specifications: { ...prev.specifications, colors },
+      specifications: { ...prev.specifications, [key]: value },
     }));
-  }, [formData]);
+  }, []);
 
-  const removeColor = useCallback(
-    (idx) => {
-      const colors = (formData.specifications.colors || [""]).filter(
-        (_, i) => i !== idx
-      );
+  // Handler for Colors (Spec level)
+  const handleColorChange = useCallback((idx, value) => {
+      setFormData((prev) => {
+        const colors = [...(prev.specifications.colors || [""])];
+        colors[idx] = value;
+        return {
+            ...prev,
+            specifications: { ...prev.specifications, colors }
+        };
+      });
+    }, []);
+
+  const addColor = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
+      specifications: { ...prev.specifications, colors: [...(prev.specifications.colors || [""]), ""] },
+    }));
+  }, []);
+
+  const removeColor = useCallback((idx) => {
       setFormData((prev) => ({
         ...prev,
-        specifications: { ...prev.specifications, colors },
+        specifications: { 
+            ...prev.specifications, 
+            colors: (prev.specifications.colors || []).filter((_, i) => i !== idx) 
+        },
       }));
-    },
-    [formData]
-  );
-
-  // CUSTOM SPEC HANDLERS (Dành cho Accessories)
-  const handleCustomSpecChange = useCallback(
-    (idx, field, value) => {
-      const specs = [...(formData.specifications || [])];
-      specs[idx] = { ...specs[idx], [field]: value };
-      setFormData((prev) => ({ ...prev, specifications: specs }));
-    },
-    [formData]
-  );
-
-  const addCustomSpec = useCallback(() => {
-    const specs = [...(formData.specifications || []), { key: "", value: "" }];
-    setFormData((prev) => ({ ...prev, specifications: specs }));
-  }, [formData]);
-
-  const removeCustomSpec = useCallback(
-    (idx) => {
-      const specs = (formData.specifications || []).filter((_, i) => i !== idx);
-      setFormData((prev) => ({ ...prev, specifications: specs }));
-    },
-    [formData]
-  );
+    }, []);
 
   return {
     formData,
@@ -193,8 +164,5 @@ export const useProductForm = (open, isEdit, effectiveCategory, product) => {
     handleColorChange,
     addColor,
     removeColor,
-    handleCustomSpecChange,
-    addCustomSpec,
-    removeCustomSpec,
   };
 };

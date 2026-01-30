@@ -1,0 +1,26 @@
+{
+  "name": "iPhone 17 Pro Max",
+  "model": "IPHONE-17-PM",
+  "brand": "Apple",
+  "slug": "iphone-17-pro-max",
+  "condition": "NEW",
+  "description": "iPhone 17 Pro Max with A19 Pro chip.",
+  "status": "AVAILABLE",
+  "categoryId": "REPLACE_WITH_VALID_ID",
+  "specifications": {
+    "screenSize": 6.9,
+    "chipset": "A19 Pro",
+    "battery": 4852,
+    "camera": "48MP Triple"
+  },
+  "variants": [
+    {
+      "attributes": { "storage": "256GB", "color": "Titanium Black" },
+      "price": 1499,
+      "originalPrice": 1599,
+      "stock": 50,
+      "sku": "IPHONE-17-PM-TITANIUM-BLACK-256GB"
+    }
+  ]
+}
+

@@ -57,11 +57,11 @@ const CSVImporter = ({ category, api, onSuccess }) => {
           specifications: {},
           variants: [],
           createdBy: user?._id || user?.id, // Thêm createdBy từ user hiện tại
-          category: category, // Gán đúng category
+          categoryId: category._id, // match backend API
         };
 
-        // Specifications theo category
-        if (category === "iPhone" || category === "iPad") {
+        // Specifications theo category slug (simplified)
+        if (category.slug === "smartphone" || category.slug === "ipad") {
           productsMap[model].specifications = {
             chip: row.chip?.trim(),
             ram: row.ram?.trim(),
@@ -74,7 +74,7 @@ const CSVImporter = ({ category, api, onSuccess }) => {
             os: row.os?.trim(),
             colors: [],
           };
-        } else if (category === "Mac") {
+        } else if (category.slug === "mac") {
           productsMap[model].specifications = {
             chip: row.chip?.trim(),
             gpu: row.gpu?.trim(),
@@ -122,12 +122,12 @@ const CSVImporter = ({ category, api, onSuccess }) => {
         stock: parseInt(row.stock) || 0,
       };
 
-      if (category === "iPhone") {
+      if (category.slug === "smartphone") {
         option.storage = row.storage?.trim();
-      } else if (category === "iPad") {
+      } else if (category.slug === "ipad") {
         option.storage = row.storage?.trim();
         option.connectivity = row.connectivity?.trim() || "WiFi";
-      } else if (category === "Mac") {
+      } else if (category.slug === "mac") {
         option.cpuGpu = row.cpuGpu?.trim();
         option.ram = row.ram?.trim();
         option.storage = row.storage?.trim();
@@ -167,7 +167,26 @@ const CSVImporter = ({ category, api, onSuccess }) => {
 
       for (const product of products) {
         try {
-          await api.create(product);
+          // Validate-only first
+          const validateRes = await api.validate({
+            ...product,
+            __source: "csv",
+          });
+          const vData = validateRes.data?.data || validateRes.data;
+          if (!vData.valid) {
+            const msgParts = [
+              ...(vData.errors || []).map((e) => `${e.path}: ${e.message}`),
+            ];
+            if (vData.unknownKeys?.length) {
+              msgParts.push(`Unknown keys: ${vData.unknownKeys.join(", ")}`);
+            }
+            throw new Error(msgParts.join("; "));
+          }
+
+          await api.create({
+            ...product,
+            __source: "csv",
+          });
           importResults.success.push(product.name);
         } catch (error) {
           importResults.failed.push({

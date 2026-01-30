@@ -1,27 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "@/components/shared/ProductCard";
-import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
-} from "@/lib/api";
+import { productAPI } from "@/lib/api";
 
 // ============================================
-// CATEGORY MAPPING
+// CATEGORY MAPPING REMOVED
 // ============================================
-const CATEGORY_API_MAP = {
-  iPhone: { api: iPhoneAPI, route: "dien-thoai" },
-  iPad: { api: iPadAPI, route: "may-tinh-bang" },
-  Mac: { api: macAPI, route: "macbook" },
-  AirPods: { api: airPodsAPI, route: "tai-nghe" },
-  AppleWatch: { api: appleWatchAPI, route: "apple-watch" },
-  Accessory: { api: accessoryAPI, route: "phu-kien" },
-  Accessories: { api: accessoryAPI, route: "phu-kien" }, // ✅ Alias cho Accessory
-};
 
 // ============================================
 // TYPO CORRECTION & TOKENIZATION
@@ -196,18 +180,13 @@ const SimilarProducts = ({ productId, category, currentProduct }) => {
           currentProductName: currentProduct?.name,
         });
 
-        const categoryInfo = CATEGORY_API_MAP[category];
-
-        if (!categoryInfo) {
-          console.warn("[SimilarProducts] Unknown category:", category);
-          setIsLoading(false);
-          return;
-        }
-
         // Fetch tất cả sản phẩm cùng category
-        const response = await categoryInfo.api.getAll({
+        // Note: category prop is now expected to be the SLUG or ID if possible, 
+        // or we use the string passed if backend supports it.
+        const response = await productAPI.getAll({
           limit: 100,
           status: "AVAILABLE",
+          category: category // Pass current category filter
         });
 
         let products = response.data?.data?.products || [];
@@ -229,8 +208,8 @@ const SimilarProducts = ({ productId, category, currentProduct }) => {
             product.name || product.model,
             currentProduct?.name || currentProduct?.model || ""
           ),
-          _category: categoryInfo.route,
-          _categoryName: category,
+          _category: product.category?.slug || 'products', // Generic fallback
+          _categoryName: product.category?.name || category,
         }));
 
         // Sắp xếp theo điểm số, rating, và salesCount

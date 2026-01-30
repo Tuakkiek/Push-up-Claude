@@ -1,6 +1,6 @@
 // ============================================
 // FILE: frontend/src/lib/api.js
-// FIXED: Complete reviewAPI with likeReview method
+// ✅ REFACTORED: Unified Product & Category API
 // ============================================
 
 import axios from "axios";
@@ -56,28 +56,26 @@ api.interceptors.response.use(
 );
 
 // ============================================
-// PRODUCT APIs (DRY)
+// UNIFIED CATALOG APIs
 // ============================================
 
-const createProductAPI = (base) => ({
-  getAll: (params) => api.get(`/${base}`, { params }),
-  getById: (id) => api.get(`/${base}/${id}`),
-  create: (data) => api.post(`/${base}`, data),
-  update: (id, data) => api.put(`/${base}/${id}`, data),
-  delete: (id) => api.delete(`/${base}/${id}`),
-  getVariants: (productId) => api.get(`/${base}/${productId}/variants`),
-  get: (slug, options = {}) => {
-    const { params = {} } = options;
-    return api.get(`/${base}/${slug}`, { params });
-  },
-});
+export const categoryAPI = {
+    getAll: () => api.get("/categories"),
+    getBySlug: (slug) => api.get(`/categories/${slug}`),
+    create: (data) => api.post("/categories", data),
+    update: (id, data) => api.put(`/categories/${id}`, data),
+    delete: (id) => api.delete(`/categories/${id}`),
+};
 
-export const iPhoneAPI = createProductAPI("iphones");
-export const iPadAPI = createProductAPI("ipads");
-export const macAPI = createProductAPI("macs");
-export const airPodsAPI = createProductAPI("airpods");
-export const appleWatchAPI = createProductAPI("applewatches");
-export const accessoryAPI = createProductAPI("accessories");
+export const productAPI = {
+    getAll: (params) => api.get("/products", { params }),
+    getById: (id) => api.get(`/products/${id}`),
+    getBySlug: (slug) => api.get(`/products/slug/${slug}`),
+    create: (data) => api.post("/products", data),
+    update: (id, data) => api.put(`/products/${id}`, data),
+    delete: (id) => api.delete(`/products/${id}`),
+    validate: (data) => api.post("/products/validate", data),
+};
 
 // ============================================
 // AUTH API
@@ -115,79 +113,46 @@ export const orderAPI = {
 };
 
 // ============================================
-// POS API - ĐÃ ĐỒNG BỘ 100% VỚI posController.js
+// POS API
 // ============================================
 export const posAPI = {
-  // Tạo đơn hàng tại quầy (POS Staff dùng)
   createOrder: (data) => api.post("/pos/create-order", data),
-
-  // Lấy danh sách đơn chờ thanh toán (Thu ngân xem)
   getPendingOrders: (params = {}) => api.get("/pos/pending-orders", { params }),
-
-  // Thu ngân xử lý thanh toán cho đơn POS
   processPayment: (orderId, data) =>
     api.post(`/pos/orders/${orderId}/payment`, data),
-
-  // Thu ngân hủy đơn đang chờ thanh toán (có hoàn lại kho + giảm salesCount)
   cancelOrder: (orderId, data = {}) =>
     api.post(`/pos/orders/${orderId}/cancel`, data),
-
-  // Thu ngân xuất hóa đơn VAT cho đơn đã thanh toán
   issueVAT: (orderId, data) => api.post(`/pos/orders/${orderId}/vat`, data),
-
-  // Xem lịch sử đơn hàng POS (POS Staff chỉ thấy của mình, Cashier/Admin thấy tất cả)
   getHistory: (params = {}) => api.get("/pos/history/", { params }),
-
-  // (Tùy chọn) Lấy chi tiết 1 đơn POS
   getOrderById: (orderId) => api.get(`/pos/orders/${orderId}`),
 };
 
 // ============================================
-// REVIEW API - ✅ UPDATED WITH NEW ENDPOINTS
+// REVIEW API
 // ============================================
-
 export const reviewAPI = {
-  // ✅ NEW: Check if user can review
   canReview: (productId) => api.get(`/reviews/can-review/${productId}`),
-
-  // Get reviews (with optional filters)
   getByProduct: (productId, params = {}) =>
     api.get(`/reviews/product/${productId}`, { params }),
-
-  // Create review (with images & orderId)
   create: (data) => api.post("/reviews", data),
-
-  // Update review
   update: (id, data) => api.put(`/reviews/${id}`, data),
-
-  // Delete review
   delete: (id) => api.delete(`/reviews/${id}`),
-
-  // Like/unlike review
   likeReview: (id) => api.post(`/reviews/${id}/like`),
-
-  // Admin functions
   replyToReview: (id, content) => api.post(`/reviews/${id}/reply`, { content }),
   updateAdminReply: (id, content) =>
     api.put(`/reviews/${id}/reply`, { content }),
   toggleVisibility: (id) => api.patch(`/reviews/${id}/toggle-visibility`),
 };
+
 // ============================================
-// PROMOTION API – PHIÊN BẢN HOÀN CHỈNH, CHUẨN ADMIN
+// PROMOTION API
 // ============================================
 export const promotionAPI = {
-  // CŨ – vẫn giữ lại cho các trang customer/public dùng
-  getAll: (params = {}) => api.get("/promotions", { params }), // ← có thể bỏ dần
-
-  // MỚI – DÀNH RIÊNG CHO ADMIN: phân trang, tìm kiếm, lọc status, sort...
-  getAllPromotions: (params = {}) => api.get("/promotions/admin", { params }), // ← THÊM DÒNG NÀY (QUAN TRỌNG NHẤT)
-
-  // Các hàm khác (giữ nguyên)
+  getAll: (params = {}) => api.get("/promotions", { params }), 
+  getAllPromotions: (params = {}) => api.get("/promotions/admin", { params }), 
   create: (data) => api.post("/promotions", data),
   update: (id, data) => api.put(`/promotions/${id}`, data),
   delete: (id) => api.delete(`/promotions/${id}`),
-
-  // Public / Customer
   getActive: () => api.get("/promotions/active"),
   apply: (data) => api.post("/promotions/apply", data),
 };
@@ -196,9 +161,7 @@ export const promotionAPI = {
 // USER API
 // ============================================
 export const userAPI = {
-  // ✅ NEW: Get all shippers (for Order Manager to assign)
   getAllShippers: () => api.get("/users/shippers"),
-
   updateProfile: (data) => api.put("/users/profile", data),
   addAddress: (data) => api.post("/users/addresses", data),
   updateAddress: (addressId, data) =>
@@ -254,34 +217,11 @@ export const getTopSelling = async (category) => {
   }
 };
 
-export const getAllProductsForCategory = async (cat) => {
-  try {
-    const response = await api.get(`/${cat}`);
-    const data = response.data?.data;
-    return data?.products || data || [];
-  } catch (error) {
-    console.error(`Error fetching products for ${cat}:`, error);
-    return [];
-  }
-};
-
 export const getTopNewProducts = async () => {
-  const categories = [
-    "iphones",
-    "ipads",
-    "macs",
-    "airpods",
-    "applewatches",
-    "accessories",
-  ];
-
   try {
-    const allProducts = (
-      await Promise.all(categories.map(getAllProductsForCategory))
-    ).flat();
-
-    allProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return allProducts.slice(0, 10).map((p) => p._id?.toString());
+    // Fetch all new products from unified API
+    const response = await productAPI.getAll({ sort: '-createdAt', limit: 10 });
+    return response.data?.data?.products || [];
   } catch (error) {
     console.error("Error fetching top new products:", error);
     return [];
@@ -312,6 +252,7 @@ export const handleApiError = (error) => {
     };
   }
 };
+
 // ============================================
 // HOMEPAGE LAYOUT API
 // ============================================
@@ -353,18 +294,6 @@ export const shortVideoAPI = {
   // Admin
   getAll: (params) => api.get("/short-videos", { params }),
   create: (data) => {
-    console.log("🚀 Calling API create with data:", data);
-    // Log FormData content
-    if (data instanceof FormData) {
-      console.log("📦 FormData entries:");
-      for (let [key, value] of data.entries()) {
-        if (value instanceof File) {
-          console.log(`- ${key}:`, value.name, value.size, value.type);
-        } else {
-          console.log(`- ${key}:`, value);
-        }
-      }
-    }
     return api.post("/short-videos", data, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -374,16 +303,8 @@ export const shortVideoAPI = {
   reorder: (videoIds) => api.put("/short-videos/reorder", { videoIds }),
 };
 
-// ============================================
-// EXPORT DEFAULT
-// ============================================
 export default {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
+  // Legacy APIs removed
   authAPI,
   cartAPI,
   orderAPI,
@@ -393,8 +314,12 @@ export default {
   userAPI,
   analyticsAPI,
   vnpayAPI,
+  categoryAPI, // ✅ NEW
+  productAPI, // ✅ NEW
   getTopSelling,
-  getAllProductsForCategory,
   getTopNewProducts,
   handleApiError,
+  homePageAPI,
+  searchAPI,
+  shortVideoAPI
 };

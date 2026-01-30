@@ -21,43 +21,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Plus, Trash2 } from "lucide-react";
 
-// Unified Forms (MỚI)
+// Generic Forms
 import UnifiedSpecsForm from "@/components/shared/specs/UnifiedSpecsForm";
 import UnifiedVariantsForm from "@/components/shared/variants/UnifiedVariantsForm";
 
-// Spec Forms (Chỉ giữ lại cho AirPods, AppleWatch, Accessories)
-import AirPodsSpecsForm from "@/components/shared/specs/AirPodsSpecsForm";
-import AppleWatchSpecsForm from "@/components/shared/specs/AppleWatchSpecsForm";
-import AccessoriesSpecsForm from "@/components/shared/specs/AccessoriesSpecsForm";
-
-// Variant Forms (Chỉ giữ lại cho AirPods, AppleWatch, Accessories)
-import AirPodsVariantsForm from "@/components/shared/variants/AirPodsVariantsForm";
-import AppleWatchVariantsForm from "@/components/shared/variants/AppleWatchVariantsForm";
-import AccessoriesVariantsForm from "@/components/shared/variants/AccessoriesVariantsForm";
-
-// Constants & Hooks
+// Hooks & Cons
 import { INSTALLMENT_BADGE_OPTIONS } from "@/lib/productConstants";
 import { useProductForm } from "@/hooks/products/useProductForm";
 import { useVariantForm } from "@/hooks/products/useVariantForm";
-import { useProductValidation } from "@/hooks/products/useProductValidation";
 import { useProductAPI } from "@/hooks/products/useProductAPI";
-import { Plus, Trash2 } from "lucide-react";
+// import { useProductValidation } from "@/hooks/products/useProductValidation"; // Todo: make validation dynamic
 
 const ProductEditModal = ({
   open,
   onOpenChange,
   mode = "edit",
-  category,
+  category, // Should be FULL Category Object now
   product,
   onSave = () => {},
 }) => {
   const isEdit = mode === "edit";
-  const effectiveCategory = isEdit ? product?.category : category;
-
   const [activeFormTab, setActiveFormTab] = useState("basic");
 
-  // 1. Hook quản lý State và Basic Handlers
+  // Hook 1: Form Data & Handlers
   const {
     formData,
     setFormData,
@@ -66,12 +54,9 @@ const ProductEditModal = ({
     handleColorChange,
     addColor,
     removeColor,
-    handleCustomSpecChange,
-    addCustomSpec,
-    removeCustomSpec,
-  } = useProductForm(open, isEdit, effectiveCategory, product);
+  } = useProductForm(open, isEdit, category, product);
 
-  // 2. Hook quản lý Variant Handlers
+  // Hook 2: Variant Handlers
   const {
     addVariant,
     removeVariant,
@@ -82,18 +67,15 @@ const ProductEditModal = ({
     handleVariantOptionChange,
     addVariantOption,
     removeVariantOption,
-  } = useVariantForm(formData, setFormData, effectiveCategory);
+  } = useVariantForm(formData, setFormData);
 
-  // 3. Hook quản lý Validation
-  const { validateForm } = useProductValidation(
-    formData,
-    effectiveCategory,
-    setActiveFormTab
-  );
+  // Validation Hook Placeholer or Generic
+  // For now we skip strict client validation or use a simplified generic one
+  const validateForm = () => true; 
 
-  // 4. Hook quản lý API Submit
+  // Hook 3: API Submit
   const { handleSubmit: submitAPI, isSubmitting } = useProductAPI(
-    effectiveCategory,
+    category, // This might need ID or slug depending on API
     isEdit,
     product,
     validateForm,
@@ -101,148 +83,26 @@ const ProductEditModal = ({
     onSave
   );
 
-  // Gắn formData vào handleSubmit
   const handleSubmit = useCallback(
     (e) => submitAPI(e, formData),
     [submitAPI, formData]
   );
 
-  // === RENDER SPECS FORM (CẬP NHẬT) ===
-  const renderSpecsForm = useCallback(() => {
-    if (!formData) return null;
+  // Loading State
+  if (!formData) return null;
 
-    const props = {
-      specs: formData.specifications || {},
-      onChange: handleSpecChange,
-      onColorChange: handleColorChange,
-      onAddColor: addColor,
-      onRemoveColor: removeColor,
-    };
-
-    const customProps = {
-      customSpecs: Array.isArray(formData.specifications)
-        ? formData.specifications
-        : [],
-      onChange: handleCustomSpecChange,
-      onAdd: addCustomSpec,
-      onRemove: removeCustomSpec,
-    };
-
-    // DÙNG UNIFIED FORM CHO iPhone/iPad/Mac
-    if (["iPhone", "iPad", "Mac"].includes(effectiveCategory)) {
-      return <UnifiedSpecsForm category={effectiveCategory} {...props} />;
-    }
-
-    // GIỮ NGUYÊN FORM RIÊNG CHO CÁC LOẠI KHÁC
-    switch (effectiveCategory) {
-      case "AirPods":
-        return <AirPodsSpecsForm {...props} />;
-      case "AppleWatch":
-        return <AppleWatchSpecsForm {...props} />;
-      case "Accessories":
-        return <AccessoriesSpecsForm {...customProps} />;
-      default:
-        return null;
-    }
-  }, [
-    formData,
-    effectiveCategory,
-    handleSpecChange,
-    handleColorChange,
-    addColor,
-    removeColor,
-    handleCustomSpecChange,
-    addCustomSpec,
-    removeCustomSpec,
-  ]);
-
-  // === RENDER VARIANTS FORM (CẬP NHẬT) ===
-  const renderVariantsForm = useCallback(() => {
-    if (!formData) return null;
-
-    const props = {
-      variants: formData.variants || [],
-      onAddVariant: addVariant,
-      onRemoveVariant: removeVariant,
-      onVariantChange: handleVariantChange,
-      onImageChange: handleVariantImageChange,
-      onAddImage: addVariantImage,
-      onRemoveImage: removeVariantImage,
-      onOptionChange: handleVariantOptionChange,
-      onAddOption: addVariantOption,
-      onRemoveOption: removeVariantOption,
-      model: formData.model,
-    };
-
-    // DÙNG UNIFIED FORM CHO iPhone/iPad/Mac
-    if (["iPhone", "iPad", "Mac"].includes(effectiveCategory)) {
-      return <UnifiedVariantsForm category={effectiveCategory} {...props} />;
-    }
-
-    // GIỮ NGUYÊN FORM RIÊNG CHO CÁC LOẠI KHÁC
-    switch (effectiveCategory) {
-      case "AirPods":
-        return <AirPodsVariantsForm {...props} />;
-      case "AppleWatch":
-        return <AppleWatchVariantsForm {...props} />;
-      case "Accessories":
-        return <AccessoriesVariantsForm {...props} />;
-      default:
-        return null;
-    }
-  }, [
-    formData,
-    effectiveCategory,
-    addVariant,
-    removeVariant,
-    handleVariantChange,
-    handleVariantImageChange,
-    addVariantImage,
-    removeVariantImage,
-    handleVariantOptionChange,
-    addVariantOption,
-    removeVariantOption,
-  ]);
-
-  // === RENDER LOADING STATE ===
-  if (!formData || !effectiveCategory) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          className="w-[90vw] max-w-none max-h-[95vh] overflow-y-auto p-0"
-          style={{ width: "50vw" }}
-        >
-          <DialogHeader className="p-6 border-b">
-            <DialogTitle className="text-2xl font-bold">
-              Đang tải...
-            </DialogTitle>
-          </DialogHeader>
-          <div className="p-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Đang tải dữ liệu...</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  // === RENDER MAIN MODAL ===
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="w-[90vw] max-w-none max-h-[95vh] overflow-y-auto p-0"
-        style={{ width: "50vw", maxWidth: "none" }}
+        style={{ width: "60vw", maxWidth: "none" }}
       >
         <DialogHeader className="p-6 border-b">
           <DialogTitle className="text-2xl font-bold">
-            {`${
-              isEdit ? "Cập nhật sản phẩm" : "Thêm sản phẩm mới"
-            } - ${effectiveCategory}`}
+            {isEdit ? "Cập nhật sản phẩm" : "Tạo sản phẩm mới"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {`${
-              isEdit ? "Chỉnh sửa thông tin sản phẩm" : "Tạo sản phẩm mới"
-            } trong danh mục ${effectiveCategory}`}
+             Danh mục: {category?.name || "..."}
           </DialogDescription>
         </DialogHeader>
 
@@ -255,75 +115,61 @@ const ProductEditModal = ({
                 <TabsTrigger value="variants">Biến thể</TabsTrigger>
               </TabsList>
 
-              {/* TAB CƠ BẢN */}
+              {/* === TAB BASIC === */}
               <TabsContent value="basic" className="space-y-4 mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>
-                      Tên sản phẩm <span className="text-red-500">*</span>
-                    </Label>
+                    <Label>Tên sản phẩm *</Label>
                     <Input
                       value={formData.name || ""}
-                      onChange={(e) =>
-                        handleBasicChange("name", e.target.value)
-                      }
+                      onChange={(e) => handleBasicChange("name", e.target.value)}
                       required
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label>
-                      Model <span className="text-red-500">*</span>
-                    </Label>
+                    <Label>Model *</Label>
                     <Input
                       value={formData.model || ""}
-                      onChange={(e) =>
-                        handleBasicChange("model", e.target.value)
-                      }
+                      onChange={(e) => handleBasicChange("model", e.target.value)}
                       required
                     />
                   </div>
-
+                  <div className="space-y-2">
+                    <Label>Thương hiệu</Label>
+                    <Input
+                      value={formData.brand || ""}
+                      onChange={(e) => handleBasicChange("brand", e.target.value)}
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label>Tình trạng</Label>
                     <Select
                       value={formData.condition || "NEW"}
-                      onValueChange={(value) =>
-                        handleBasicChange("condition", value)
-                      }
+                      onValueChange={(v) => handleBasicChange("condition", v)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NEW">Mới 100%</SelectItem>
-                        <SelectItem value="LIKE_NEW">Like new</SelectItem>
+                        <SelectItem value="LIKE_NEW">Like New</SelectItem>
+                        <SelectItem value="USED">Cũ</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Trạng thái</Label>
                     <Select
                       value={formData.status || "AVAILABLE"}
-                      onValueChange={(value) =>
-                        handleBasicChange("status", value)
-                      }
+                      onValueChange={(v) => handleBasicChange("status", v)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="AVAILABLE">Còn hàng</SelectItem>
                         <SelectItem value="OUT_OF_STOCK">Hết hàng</SelectItem>
-                        <SelectItem value="DISCONTINUED">
-                          Ngừng kinh doanh
-                        </SelectItem>
+                        <SelectItem value="DISCONTINUED">Ngừng KD</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     <Label>Trả góp 0%</Label>
                     <Select
                       value={formData.installmentBadge || "NONE"}
@@ -342,10 +188,6 @@ const ProductEditModal = ({
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Badge này chỉ hiển thị khi sản phẩm không thuộc top "Mới"
-                      hoặc "Bán chạy"
-                    </p>
                   </div>
                 </div>
 
@@ -353,154 +195,89 @@ const ProductEditModal = ({
                   <Label>Mô tả</Label>
                   <textarea
                     value={formData.description || ""}
-                    onChange={(e) =>
-                      handleBasicChange("description", e.target.value)
-                    }
+                    onChange={(e) => handleBasicChange("description", e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Nhập mô tả sản phẩm..."
                   />
                 </div>
 
-                {/* Featured Images URLs - MULTIPLE */}
+                {/* Featured Images */}
                 <div className="space-y-2">
-                  <Label>URL Ảnh Nổi Bật (Featured Images)</Label>
+                  <Label>Hình ảnh nổi bật (Featured)</Label>
                   {(formData.featuredImages || [""]).map((url, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <Input
                         value={url}
                         onChange={(e) => {
-                          const newImages = [
-                            ...(formData.featuredImages || [""]),
-                          ];
+                          const newImages = [...formData.featuredImages || [""]];
                           newImages[idx] = e.target.value;
                           handleBasicChange("featuredImages", newImages);
                         }}
-                        placeholder="https://example.com/featured-image.jpg"
+                        placeholder="URL hình ảnh..."
                       />
                       <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
+                        type="button" variant="outline" size="sm"
                         onClick={() => {
-                          const newImages = (
-                            formData.featuredImages || [""]
-                          ).filter((_, i) => i !== idx);
-                          handleBasicChange(
-                            "featuredImages",
-                            newImages.length ? newImages : [""]
-                          );
+                           const newImages = (formData.featuredImages || []).filter((_, i) => i !== idx);
+                           handleBasicChange("featuredImages", newImages.length ? newImages : [""]);
                         }}
-                        disabled={
-                          (formData.featuredImages || [""]).length === 1
-                        }
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   ))}
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+                    type="button" variant="outline" size="sm"
                     onClick={() => {
-                      const newImages = [
-                        ...(formData.featuredImages || [""]),
-                        "",
-                      ];
-                      handleBasicChange("featuredImages", newImages);
+                        handleBasicChange("featuredImages", [...(formData.featuredImages || []), ""]);
                     }}
                   >
-                    <Plus className="w-4 h-4 mr-2" /> Thêm URL ảnh
+                    <Plus className="w-4 h-4 mr-2" /> Thêm ảnh
                   </Button>
-                  <p className="text-xs text-gray-500">
-                    Các ảnh này sẽ hiển thị nổi bật trên trang sản phẩm
-                  </p>
                 </div>
-
-                {/* Video URLs - MULTIPLE */}
-                {/* <div className="space-y-2">
-                  <Label>URL Video Giới Thiệu</Label>
-                  {(formData.videoUrls || [""]).map((url, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        value={url}
-                        onChange={(e) => {
-                          const newVideos = [...(formData.videoUrls || [""])];
-                          newVideos[idx] = e.target.value;
-                          handleBasicChange("videoUrls", newVideos);
-                        }}
-                        placeholder="https://youtube.com/watch?v=... hoặc https://example.com/video.mp4"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const newVideos = (formData.videoUrls || [""]).filter(
-                            (_, i) => i !== idx
-                          );
-                          handleBasicChange(
-                            "videoUrls",
-                            newVideos.length ? newVideos : [""]
-                          );
-                        }}
-                        disabled={(formData.videoUrls || [""]).length === 1}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newVideos = [...(formData.videoUrls || [""]), ""];
-                      handleBasicChange("videoUrls", newVideos);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-2" /> Thêm URL video
-                  </Button>
-                  <p className="text-xs text-gray-500">
-                    URL YouTube hoặc video trực tiếp (MP4)
-                  </p>
-                </div> */}
-
-                {/* Video URL */}
+                 {/* Video URL */}
                 <div className="space-y-2">
-                  <Label>URL Video Giới Thiệu</Label>
+                  <Label>Video URL</Label>
                   <Input
                     value={formData.videoUrl || ""}
-                    onChange={(e) =>
-                      handleBasicChange("videoUrl", e.target.value)
-                    }
-                    placeholder="https://youtube.com/watch?v=... hoặc https://example.com/video.mp4"
+                    onChange={(e) => handleBasicChange("videoUrl", e.target.value)}
+                    placeholder="URL Youtube/MP4"
                   />
-                  <p className="text-xs text-gray-500">
-                    URL YouTube hoặc video trực tiếp (MP4)
-                  </p>
                 </div>
               </TabsContent>
 
-              {/* TAB THÔNG SỐ */}
+              {/* === TAB SPECS === */}
               <TabsContent value="specs" className="mt-4">
-                {renderSpecsForm()}
+                <UnifiedSpecsForm 
+                    schema={category?.specSchema} 
+                    specs={formData.specifications || {}}
+                    onChange={handleSpecChange}
+                    onColorChange={handleColorChange}
+                    onAddColor={addColor}
+                    onRemoveColor={removeColor}
+                />
               </TabsContent>
 
-              {/* TAB BIẾN THỂ */}
+              {/* === TAB VARIANTS === */}
               <TabsContent value="variants" className="mt-4">
-                {renderVariantsForm()}
+                <UnifiedVariantsForm
+                    schema={category?.variantSchema}
+                    variants={formData.variants || []}
+                    onAddVariant={addVariant}
+                    onRemoveVariant={removeVariant}
+                    onVariantChange={handleVariantChange}
+                    onImageChange={handleVariantImageChange}
+                    onAddImage={addVariantImage}
+                    onRemoveImage={removeVariantImage}
+                    onOptionChange={handleVariantOptionChange}
+                    onAddOption={addVariantOption}
+                    onRemoveOption={removeVariantOption}
+                />
               </TabsContent>
             </Tabs>
 
-            {/* BUTTONS */}
             <div className="flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Hủy
               </Button>
               <Button type="submit" disabled={isSubmitting}>

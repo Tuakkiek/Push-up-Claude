@@ -1,13 +1,25 @@
 import { useCallback } from "react";
-import { emptyVariant } from "@/lib/productConstants";
+
 
 export const useVariantForm = (formData, setFormData, effectiveCategory) => {
   const addVariant = useCallback(() => {
     setFormData((prev) => ({
       ...prev,
-      variants: [...prev.variants, emptyVariant(effectiveCategory)],
+      variants: [
+        ...prev.variants,
+        {
+          color: "",
+          images: [""],
+          options: [{
+             price: "",
+             originalPrice: "",
+             stock: "",
+             sku: ""
+          }] // Generic empty option
+        }
+      ],
     }));
-  }, [effectiveCategory, setFormData]);
+  }, [setFormData]);
 
   const removeVariant = useCallback(
     (vIdx) => {

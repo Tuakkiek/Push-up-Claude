@@ -28,6 +28,7 @@
     "remove-vietnamese-accents": "^1.0.7",
     "smartmobilestore": "file:..",
     "vnpay": "^2.4.4",
+    "winston": "^3.19.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

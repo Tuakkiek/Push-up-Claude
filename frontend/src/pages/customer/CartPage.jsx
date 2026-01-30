@@ -38,14 +38,7 @@ import { useCartStore } from "@/store/cartStore";
 import { formatPrice, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
-} from "@/lib/api";
+import { productAPI } from "@/lib/api";
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -330,18 +323,7 @@ const confirmBulkDelete = async () => {
 
     setLoadingVariants((prev) => ({ ...prev, [item.productId]: true }));
     try {
-      const apiMap = {
-        iPhone: iPhoneAPI,
-        iPad: iPadAPI,
-        Mac: macAPI,
-        AirPods: airPodsAPI,
-        AppleWatch: appleWatchAPI,
-        Accessory: accessoryAPI,
-      };
-      const api = apiMap[item.productType];
-      if (!api) return null;
-
-      const res = await api.getById(item.productId);
+      const res = await productAPI.getById(item.productId);
       const product = res.data.data.product;
       const variants = product.variants || [];
 

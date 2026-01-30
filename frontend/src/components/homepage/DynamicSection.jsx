@@ -168,7 +168,14 @@ const DynamicSection = ({
     // ============================================
     case "category-section":
       const categoryProducts = allProducts
-        .filter((p) => p.category === config.categoryFilter)
+        .filter((p) => {
+           // Handle populated category object or direct ID string
+           const pCatId = p.category?._id || p.category;
+           const pCatSlug = p.category?.slug;
+           const filter = config.categoryFilter;
+           
+           return pCatId === filter || pCatSlug === filter;
+        })
         .slice(0, config.limit || 10);
 
       return (

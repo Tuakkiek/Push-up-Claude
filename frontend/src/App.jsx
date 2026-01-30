@@ -27,11 +27,14 @@ import ProfilePage from "@/pages/customer/ProfilePage";
 
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import EmployeesPage from "@/pages/admin/EmployeesPage";
+import CategoryListPage from "@/pages/admin/CategoryListPage";
+import CategoryEditorPage from "@/pages/admin/CategoryEditorPage";
 import PromotionsPage from "@/pages/admin/PromotionsPage";
 import HomePageEditor from "@/pages/admin/HomePageEditor";
 import ShortVideoAdminPage from "@/pages/admin/ShortVideoAdminPage";
 
 import WarehouseProductsPage from "@/pages/warehouse/ProductsPage";
+import ProductEditorPage from "@/pages/admin/ProductEditorPage"; // ✅ NEW
 import OrderManagementPage from "@/pages/order-manager/OrderManagementPage";
 
 import ShipperDashboard from "@/pages/shipper/ShipperDashboard";
@@ -105,27 +108,27 @@ function App() {
           {/* Products */}
           <Route path="/products" element={<ProductsPage />} />
 
-          {/* Legacy category routes */}
+          {/* Legacy category routes - Redirect to query-based URLs */}
           <Route
             path="/dien-thoai"
-            element={<ProductsPage category="iPhone" />}
+            element={<Navigate to="/products?category=smartphone" replace />}
           />
           <Route
             path="/may-tinh-bang"
-            element={<ProductsPage category="iPad" />}
+            element={<Navigate to="/products?category=tablet" replace />}
           />
-          <Route path="/macbook" element={<ProductsPage category="Mac" />} />
+          <Route path="/macbook" element={<Navigate to="/products?category=laptop" replace />} />
           <Route
             path="/tai-nghe"
-            element={<ProductsPage category="AirPods" />}
+            element={<Navigate to="/products?category=smartphone" replace />}
           />
           <Route
             path="/apple-watch"
-            element={<ProductsPage category="AppleWatch" />}
+            element={<Navigate to="/products?category=smartwatch" replace />}
           />
           <Route
             path="/phu-kien"
-            element={<ProductsPage category="Accessories" />}
+            element={<Navigate to="/products?category=smartphone" replace />}
           />
 
           {/* Search */}
@@ -195,6 +198,9 @@ function App() {
         >
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/employees" element={<EmployeesPage />} />
+          <Route path="/admin/categories" element={<CategoryListPage />} />
+          <Route path="/admin/categories/new" element={<CategoryEditorPage />} />
+          <Route path="/admin/categories/:id/edit" element={<CategoryEditorPage />} />
           <Route path="/admin/promotions" element={<PromotionsPage />} />
           <Route path="/admin/homepage-editor" element={<HomePageEditor />} />
           <Route path="/admin/short-videos" element={<ShortVideoAdminPage />} />
@@ -214,6 +220,9 @@ function App() {
             path="/warehouse/products"
             element={<WarehouseProductsPage />}
           />
+          {/* ✅ NEW: Full Screen Product Editor */}
+          <Route path="/admin/products/editor" element={<ProductEditorPage />} />
+          <Route path="/admin/products/editor/:id" element={<ProductEditorPage />} />
         </Route>
 
         {/* ========================================

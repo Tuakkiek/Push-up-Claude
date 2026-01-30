@@ -6,12 +6,7 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
+  productAPI
 } from "@/lib/api";
 
 export function cn(...inputs) {
@@ -75,24 +70,8 @@ export const getStatusText = (status) => {
 // Function to fetch all products across all categories
 export const fetchAllProducts = async (params = {}) => {
   try {
-    const [iphones, ipads, macs, airpods, applewatches, accessories] =
-      await Promise.all([
-        iPhoneAPI.getAll(params),
-        iPadAPI.getAll(params),
-        macAPI.getAll(params),
-        airPodsAPI.getAll(params),
-        appleWatchAPI.getAll(params),
-        accessoryAPI.getAll(params),
-      ]);
-
-    const allProducts = [
-      ...(iphones?.data?.data?.products || []),
-      ...(ipads?.data?.data?.products || []),
-      ...(macs?.data?.data?.products || []),
-      ...(airpods?.data?.data?.products || []),
-      ...(applewatches?.data?.data?.products || []),
-      ...(accessories?.data?.data?.products || []),
-    ];
+    const response = await productAPI.getAll({ ...params, limit: 1000 });
+    const allProducts = response?.data?.data?.products || [];
 
     allProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 

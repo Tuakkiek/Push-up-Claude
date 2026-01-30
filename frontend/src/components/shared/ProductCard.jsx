@@ -104,7 +104,7 @@ const ProductCard = ({
   const safeVariants = Array.isArray(product?.variants) ? product.variants : [];
 
   // ==========================================================================
-  // 1. TỰ ĐỘNG CHỌN VARIANT MẶC ĐỊNH (Ưu tiên stock > 0 + slug)
+  // 1. TỰ ĐỘNG CHỌN VARIANT MẶC ĐỊNH (Ưu tiên stock > 0)
   // ==========================================================================
   useEffect(() => {
     if (!safeVariants.length) {
@@ -113,14 +113,15 @@ const ProductCard = ({
       return;
     }
 
-    let variant = safeVariants.find((v) => v.stock > 0 && v.sku && v.slug);
-    if (!variant) variant = safeVariants.find((v) => v.sku && v.slug);
+    // Variants don't have slug field - use product.slug
+    let variant = safeVariants.find((v) => v.stock > 0 && v.sku);
     if (!variant) variant = safeVariants.find((v) => v.sku);
     if (!variant) variant = safeVariants[0];
 
     setSelectedVariant(variant);
-    setIsVariantReady(!!(variant?.sku && (variant?.slug || product.baseSlug)));
-  }, [product.variants, product.baseSlug, product.name, safeVariants]);
+    // Use product.slug since variants don't have slug field
+    setIsVariantReady(!!(variant?.sku && product.slug));
+  }, [product.variants, product.slug, product.name, safeVariants]);
 
   // ==========================================================================
   // 2. DỮ LIỆU HIỂN THỊ HIỆN TẠI
@@ -170,7 +171,8 @@ const ProductCard = ({
   // ==========================================================================
   // 4. DANH SÁCH NÚT CHỌN VARIANT (128GB, 256GB, 1TB...)
   // ==========================================================================
-  const keyField = VARIANT_KEY_FIELD[product.category] || "variantName";
+  const catName = typeof product.category === 'object' ? product.category?.name : product.category;
+  const keyField = VARIANT_KEY_FIELD[catName] || "variantName";
 
   // Hàm chuẩn hóa dung lượng: chuyển TB → GB để so sánh đúng
   const normalizeStorage = (value) => {
@@ -194,6 +196,19 @@ const ProductCard = ({
   // ==========================================================================
   // 5. EVENT HANDLERS
   // ==========================================================================
+  // ==========================================================================
+  // EVENT HANDLERS
+  // ==========================================================================
+  
+  // Helper to safely get category slug/name
+  const getCategoryInfo = () => {
+    const cat = product.category;
+    if (typeof cat === 'object' && cat !== null) {
+        return { slug: cat.slug, name: cat.name, id: cat._id };
+    }
+    return { slug: cat, name: cat, id: cat };
+  };
+
   const handleVariantKeyClick = (e, keyValue) => {
     e.stopPropagation();
     let variant = safeVariants.find(
@@ -227,14 +242,14 @@ const ProductCard = ({
 
     setIsAdding(true);
     try {
-      const productType =
-        CATEGORY_TO_TYPE_MAP[product.category] || product.category;
+      const { name, id } = getCategoryInfo();
+      // Fallback to name/id if type map fails, but preferably use what backend expects
+      const productType = CATEGORY_TO_TYPE_MAP[name] || name || id;
 
-      // ĐÃ SỬA: Gọi addToCart với 3 tham số riêng
       const result = await addToCart(
         selectedVariant._id, // variantId
         1, // quantity
-        productType // productType
+        productType
       );
 
       if (result?.success) {
@@ -266,33 +281,23 @@ const ProductCard = ({
   };
 
   const handleCardClick = () => {
-    const categoryPath = {
-      iPhone: "dien-thoai",
-      iPad: "may-tinh-bang",
-      Mac: "macbook",
-      AppleWatch: "apple-watch",
-      AirPods: "tai-nghe",
-      Accessories: "phu-kien",
-    }[product.category];
+    const { slug, name } = getCategoryInfo();
 
-    if (!categoryPath) {
-      console.warn("Unknown category:", product.category);
-      return;
-    }
+    // Use the category slug directly from the populated category
+    const categoryPath = slug || 'products';
 
-    if (selectedVariant?.sku && selectedVariant?.slug) {
-      const url = `/${categoryPath}/${selectedVariant.slug}?sku=${selectedVariant.sku}`;
+    // Safe path construction
+    const basePath = `/${categoryPath}`;
+
+    // Use product.slug since variants don't have slug field
+    if (selectedVariant?.sku && product.slug) {
+      const url = `${basePath}/${product.slug}?sku=${selectedVariant.sku}`;
       navigate(url);
       return;
     }
 
-    if (product.baseSlug) {
-      const url = `/${categoryPath}/${product.baseSlug}`;
-      navigate(url);
-      return;
-    }
-
-    toast.error("Không thể xem chi tiết sản phẩm");
+    // Fallback to product slug
+    navigate(`${basePath}/${product.slug || product._id}`);
   };
 
   const getVariantLabel = (variant) => {

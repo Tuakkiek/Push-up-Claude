@@ -8,25 +8,10 @@ import { Loading } from "@/components/shared/Loading";
 import DynamicSection from "@/components/homepage/DynamicSection";
 import ProductEditModal from "@/components/shared/ProductEditModal";
 import { useAuthStore } from "@/store/authStore";
-import { homePageAPI } from "@/lib/api";
-import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
-} from "@/lib/api";
+import { homePageAPI, productAPI } from "@/lib/api";
 import { toast } from "sonner";
 
-const API_MAP = {
-  iPhone: iPhoneAPI,
-  iPad: iPadAPI,
-  Mac: macAPI,
-  AirPods: airPodsAPI,
-  AppleWatch: appleWatchAPI,
-  Accessories: accessoryAPI,
-};
+// const API_MAP = ... Removed
 
 const HomePage = () => {
   const { isAuthenticated, user } = useAuthStore();
@@ -61,30 +46,10 @@ const HomePage = () => {
   // FETCH ALL PRODUCTS
   // ============================================
   const fetchAllProducts = useCallback(async () => {
-    const allProductsList = [];
-
     try {
-      await Promise.all(
-        Object.keys(API_MAP).map(async (category) => {
-          const api = API_MAP[category];
-          if (!api?.getAll) return;
-
-          try {
-            const response = await api.getAll({ limit: 100 });
-            const products =
-              response.data?.data?.products || response.data || [];
-            const productsWithCategory = products.map((p) => ({
-              ...p,
-              category,
-            }));
-            allProductsList.push(...productsWithCategory);
-          } catch (error) {
-            console.error(`Error fetching ${category}:`, error);
-          }
-        })
-      );
-
-      setAllProducts(allProductsList);
+      const response = await productAPI.getAll({ limit: 100 }); // Adjust limit as needed
+      const products = response.data?.data?.products || [];
+      setAllProducts(products);
     } catch (err) {
       console.error("Error loading products:", err);
       toast.error("Không thể tải dữ liệu sản phẩm");
@@ -113,14 +78,8 @@ const HomePage = () => {
   };
 
   const handleDelete = async (productId, category) => {
-    const api = API_MAP[category];
-    if (!api?.delete) {
-      toast.error("Không hỗ trợ xóa sản phẩm này");
-      return;
-    }
-
     try {
-      await api.delete(productId);
+      await productAPI.delete(productId);
       toast.success("Xóa sản phẩm thành công");
       fetchAllProducts(); // Reload products
     } catch (error) {

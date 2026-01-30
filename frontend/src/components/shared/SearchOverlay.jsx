@@ -5,14 +5,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, X, ChevronRight } from "lucide-react";
-import {
-  iPhoneAPI,
-  iPadAPI,
-  macAPI,
-  airPodsAPI,
-  appleWatchAPI,
-  accessoryAPI,
-} from "@/lib/api";
+import { productAPI } from "@/lib/api";
 // ============================================
 // 1. TYPO DICTIONARY & HELPER
 // ============================================
@@ -183,38 +176,7 @@ const calculateRelevanceScore = (productName, query) => {
 // ============================================
 // CATEGORY CONFIG (Increased Limits)
 // ============================================
-const SEARCH_CATEGORIES = [
-  {
-    id: "iphone",
-    name: "iPhone",
-    api: iPhoneAPI,
-    route: "dien-thoai",
-    limit: 10,
-  },
-  { id: "ipad", name: "iPad", api: iPadAPI, route: "may-tinh-bang", limit: 10 },
-  { id: "mac", name: "Mac", api: macAPI, route: "macbook", limit: 10 },
-  {
-    id: "airpods",
-    name: "AirPods",
-    api: airPodsAPI,
-    route: "tai-nghe",
-    limit: 10,
-  },
-  {
-    id: "watch",
-    name: "Apple Watch",
-    api: appleWatchAPI,
-    route: "apple-watch",
-    limit: 10,
-  },
-  {
-    id: "accessories",
-    name: "Accessories",
-    api: accessoryAPI,
-    route: "phu-kien",
-    limit: 10,
-  },
-];
+// CATEGORIES CONFIG REMOVED
 const QUICK_LINKS = [
   { name: "iPhone", path: "/dien-thoai" },
   { name: "iPad", path: "/may-tinh-bang" },
@@ -229,68 +191,34 @@ const searchProducts = async (rawQuery) => {
   if (!rawQuery?.trim()) return [];
 
   const correctedQuery = correctTypos(rawQuery);
-  const queryTokens = tokenizeQuery(correctedQuery);
+  // const queryTokens = tokenizeQuery(correctedQuery);
 
   try {
-    const searchPromises = SEARCH_CATEGORIES.map(async (category) => {
-      try {
-        // Tìm với query gốc trước
-        const mainSearch = await category.api.getAll({
-          search: correctedQuery,
-          limit: category.limit,
-        });
-
-        let products = mainSearch.data?.data?.products || [];
-
-        // Nếu kết quả ít, thử tìm với từng token
-        if (products.length < 3 && queryTokens.length > 1) {
-          const tokenSearches = await Promise.all(
-            queryTokens.slice(0, 2).map(
-              (
-                token // Chỉ lấy 2 token đầu
-              ) =>
-                category.api
-                  .getAll({
-                    search: token,
-                    limit: 5,
-                  })
-                  .catch(() => ({ data: { data: { products: [] } } }))
-            )
-          );
-
-          tokenSearches.forEach((res) => {
-            const tokenProducts = res.data?.data?.products || [];
-            // Merge kết quả, tránh duplicate
-            tokenProducts.forEach((p) => {
-              if (!products.find((existing) => existing._id === p._id)) {
-                products.push(p);
-              }
-            });
-          });
-        }
-
-        return products.map((product) => ({
-          ...product,
-          _category: category.route,
-          _categoryName: category.name,
-          _score: calculateRelevanceScore(
-            product.name || product.model,
-            correctedQuery
-          ),
-        }));
-      } catch (error) {
-        return [];
-      }
+    // Single Global Search
+    const response = await productAPI.getAll({
+        search: correctedQuery,
+        limit: 20
     });
+    
+    let products = response.data?.data?.products || [];
 
-    const results = await Promise.all(searchPromises);
-    let allResults = results.flat();
+    // Calculate Scores locally for frontend display sorting (optional if backend sorts by score)
+    const results = products.map((product) => ({
+      ...product,
+      // Generic category route if populated, else 'products'
+      _category: product.category?.slug || 'products',
+      _categoryName: product.category?.name || 'Sản phẩm',
+      _score: calculateRelevanceScore(
+        product.name || product.model,
+        correctedQuery
+      ),
+    }));
 
     // Sắp xếp theo điểm số (Cao -> Thấp)
-    allResults.sort((a, b) => b._score - a._score);
+    results.sort((a, b) => b._score - a._score);
 
     // Lấy 10 kết quả tốt nhất
-    return allResults.slice(0, 10);
+    return results.slice(0, 10);
   } catch (error) {
     console.error("❌ Search error:", error);
     return [];
