@@ -1,0 +1,117 @@
+/* ============================================
+   DynamicVariantEditor.css
+   Styles for dynamic variant editor
+   ============================================ */
+
+.variant-editor {
+  padding: 0;
+}
+
+/* Editor Header */
+.editor-header {
+  margin-bottom: 1.5rem;
+}
+
+.editor-hint {
+  margin: 0;
+  padding: 1rem;
+  background: #f0f9ff;
+  border-left: 4px solid #007aff;
+  border-radius: 6px;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+/* Variant Group */
+.variant-group {
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  margin-bottom: 1.5rem;
+}
+
+/* Group Header */
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.group-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.btn-remove {
+  color: #ff3b30;
+  border-color: #ff3b30;
+}
+
+.btn-remove:hover {
+  background: #fff3f3;
+}
+
+/* Versions Section */
+.versions-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #d1d1d6;
+}
+
+.section-label {
+  display: block;
+  margin-bottom: 1rem;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #333;
+}
+
+/* Version Row */
+.version-row {
+  padding: 1rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #d1d1d6;
+  margin-bottom: 1rem;
+}
+
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.version-number {
+  font-weight: 600;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.version-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+/* Button Variants */
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.btn-add-group {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .version-fields {
+    grid-template-columns: 1fr;
+  }
+}

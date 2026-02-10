@@ -249,7 +249,10 @@ productTypeSchema.methods.validateSpecifications = function (specifications) {
 
 // Auto-generate slug from name if not provided
 productTypeSchema.pre("save", function (next) {
-  if (!this.slug && this.name) {
+  console.log('🔧 PRE-SAVE HOOK - Current slug:', this.slug, 'Name:', this.name);
+  
+  // Generate slug if not provided or empty
+  if ((!this.slug || this.slug.trim() === '') && this.name) {
     this.slug = this.name
       .toLowerCase()
       .normalize("NFD")
@@ -259,6 +262,9 @@ productTypeSchema.pre("save", function (next) {
       .replace(/\-\-+/g, "-")
       .replace(/^-+/, "")
       .replace(/-+$/, "");
+    console.log('✅ Generated slug:', this.slug);
+  } else {
+    console.log('ℹ️ Using existing slug:', this.slug);
   }
   next();
 });

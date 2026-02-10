@@ -3,11 +3,40 @@
 // ✅ STEP 6: ProductType API Service
 // Purpose: Fetch product types from database
 // Replaces: Hard-coded CATEGORIES array
+// FIXED: Use authenticated api instance instead of raw axios
 // ============================================
 
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+// ✅ Create authenticated axios instance
+const api = axios.create({
+  baseURL: API_URL,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: true,
+});
+
+// ✅ Add authorization interceptor
+api.interceptors.request.use(
+  (config) => {
+    const authStorage = localStorage.getItem("auth-storage");
+    if (authStorage) {
+      try {
+        const { state } = JSON.parse(authStorage);
+        const token = state?.token;
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+          console.log('🔑 Token added to request:', config.url);
+        }
+      } catch (error) {
+        console.error("Error parsing auth-storage:", error);
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // ============================================
 // PRODUCT TYPE API
@@ -19,10 +48,19 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
  */
 export const getActiveProductTypes = async () => {
   try {
-    const response = await axios.get(`${API_URL}/product-types/active`);
+    const url = '/product-types/active';
+    console.log('🔍 Fetching active product types from:', url);
+    const response = await api.get(url);
+    console.log('✅ Active product types response:', response.data);
     return response.data.data.types || [];
   } catch (error) {
-    console.error("Error fetching active product types:", error);
+    console.error("❌ Error fetching active product types:", {
+      url: error.config?.url,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
     throw error;
   }
 };
@@ -34,7 +72,7 @@ export const getActiveProductTypes = async () => {
  */
 export const getAllProductTypes = async (params = {}) => {
   try {
-    const response = await axios.get(`${API_URL}/product-types`, { params });
+    const response = await api.get('/product-types', { params });
     return response.data.data.productTypes || [];
   } catch (error) {
     console.error("Error fetching all product types:", error);
@@ -49,7 +87,7 @@ export const getAllProductTypes = async (params = {}) => {
  */
 export const getProductTypeById = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/product-types/${id}`);
+    const response = await api.get(`/product-types/${id}`);
     return response.data.data.productType;
   } catch (error) {
     console.error("Error fetching product type by ID:", error);
@@ -64,7 +102,7 @@ export const getProductTypeById = async (id) => {
  */
 export const getProductTypeBySlug = async (slug) => {
   try {
-    const response = await axios.get(`${API_URL}/product-types/slug/${slug}`);
+    const response = await api.get(`/product-types/slug/${slug}`);
     return response.data.data.productType;
   } catch (error) {
     console.error("Error fetching product type by slug:", error);
@@ -79,10 +117,21 @@ export const getProductTypeBySlug = async (slug) => {
  */
 export const createProductType = async (data) => {
   try {
-    const response = await axios.post(`${API_URL}/product-types`, data);
+    const url = '/product-types';
+    console.log('🔍 Creating product type:', { url, payload: data });
+    const response = await api.post(url, data);
+    console.log('✅ Product type created:', response.data);
     return response.data.data.productType;
   } catch (error) {
-    console.error("Error creating product type:", error);
+    console.error("❌ Error creating product type:", {
+      url: error.config?.url,
+      method: error.config?.method,
+      payload: data,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
     throw error;
   }
 };
@@ -95,7 +144,7 @@ export const createProductType = async (data) => {
  */
 export const updateProductType = async (id, data) => {
   try {
-    const response = await axios.put(`${API_URL}/product-types/${id}`, data);
+    const response = await api.put(`/product-types/${id}`, data);
     return response.data.data.productType;
   } catch (error) {
     console.error("Error updating product type:", error);
@@ -110,7 +159,7 @@ export const updateProductType = async (id, data) => {
  */
 export const deleteProductType = async (id) => {
   try {
-    await axios.delete(`${API_URL}/product-types/${id}`);
+    await api.delete(`/product-types/${id}`);
   } catch (error) {
     console.error("Error deleting product type:", error);
     throw error;
@@ -125,8 +174,8 @@ export const deleteProductType = async (id) => {
  */
 export const addSpecificationField = async (id, field) => {
   try {
-    const response = await axios.post(
-      `${API_URL}/product-types/${id}/fields`,
+    const response = await api.post(
+      `/product-types/${id}/fields`,
       field
     );
     return response.data.data.productType;
@@ -145,8 +194,8 @@ export const addSpecificationField = async (id, field) => {
  */
 export const updateSpecificationField = async (id, fieldName, updates) => {
   try {
-    const response = await axios.put(
-      `${API_URL}/product-types/${id}/fields/${fieldName}`,
+    const response = await api.put(
+      `/product-types/${id}/fields/${fieldName}`,
       updates
     );
     return response.data.data.productType;
@@ -164,8 +213,8 @@ export const updateSpecificationField = async (id, fieldName, updates) => {
  */
 export const removeSpecificationField = async (id, fieldName) => {
   try {
-    const response = await axios.delete(
-      `${API_URL}/product-types/${id}/fields/${fieldName}`
+    const response = await api.delete(
+      `/product-types/${id}/fields/${fieldName}`
     );
     return response.data.data.productType;
   } catch (error) {

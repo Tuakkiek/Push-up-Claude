@@ -30,6 +30,7 @@ import EmployeesPage from "@/pages/admin/EmployeesPage";
 import PromotionsPage from "@/pages/admin/PromotionsPage";
 import HomePageEditor from "@/pages/admin/HomePageEditor";
 import ShortVideoAdminPage from "@/pages/admin/ShortVideoAdminPage";
+import ProductTypeManager from "@/pages/admin/ProductTypeManager";
 
 import WarehouseProductsPage from "@/pages/warehouse/ProductsPage";
 import OrderManagementPage from "@/pages/order-manager/OrderManagementPage";
@@ -195,6 +196,7 @@ function App() {
         >
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/employees" element={<EmployeesPage />} />
+          <Route path="/admin/product-types" element={<ProductTypeManager />} />
           <Route path="/admin/promotions" element={<PromotionsPage />} />
           <Route path="/admin/homepage-editor" element={<HomePageEditor />} />
           <Route path="/admin/short-videos" element={<ShortVideoAdminPage />} />

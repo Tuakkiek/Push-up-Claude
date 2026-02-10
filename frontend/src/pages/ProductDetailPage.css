@@ -1,0 +1,133 @@
+/* ============================================
+   FILE: frontend/src/pages/ProductDetailPage.css
+   ✅ STEP 9: Product Detail Page Styles
+   ============================================ */
+
+.product-detail-page {
+  min-height: 100vh;
+  background: #f8f9fa;
+  padding: 24px;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  max-width: 1400px;
+  margin: 0 auto 24px auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.breadcrumb-link {
+  color: #2196f3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.breadcrumb-link:hover {
+  color: #1976d2;
+  text-decoration: underline;
+}
+
+.breadcrumb-separator {
+  color: #999;
+}
+
+.breadcrumb-current {
+  color: #666;
+}
+
+/* Loading State */
+.product-detail-page .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 20px;
+  gap: 16px;
+}
+
+.product-detail-page .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.product-detail-page .loading-state p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+/* Error State */
+.product-detail-page .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 20px;
+  gap: 16px;
+  background: white;
+  border-radius: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.error-icon {
+  font-size: 64px;
+}
+
+.product-detail-page .error-state h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.product-detail-page .error-state p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.btn-back {
+  padding: 12px 24px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 8px;
+}
+
+.btn-back:hover {
+  background: #1976d2;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .product-detail-page {
+    padding: 16px;
+  }
+
+  .breadcrumb {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+}

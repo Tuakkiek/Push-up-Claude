@@ -12,8 +12,10 @@ import UnifiedProduct from "../models/UnifiedProduct.js";
 // ============================================
 export const create = async (req, res) => {
   try {
-    const { name, description, icon, specificationFields, displayOrder } =
+    console.log('📥 CREATE PRODUCT TYPE - Request body:', req.body);
+    const { name, slug, description, icon, specificationFields, displayOrder } =
       req.body;
+    console.log('📝 Extracted fields:', { name, slug, description, icon, displayOrder });
 
     // Validate required fields
     if (!name?.trim()) {
@@ -35,8 +37,8 @@ export const create = async (req, res) => {
       });
     }
 
-    // Create product type
-    const productType = await ProductType.create({
+    // Prepare data
+    const productTypeData = {
       name: name.trim(),
       description: description?.trim() || "",
       icon: icon?.trim() || "",
@@ -44,7 +46,22 @@ export const create = async (req, res) => {
       displayOrder: displayOrder || 0,
       status: "ACTIVE",
       createdBy: req.user._id,
-    });
+    };
+
+    // Add slug if provided
+    if (slug?.trim()) {
+      productTypeData.slug = slug.trim();
+      console.log('✅ Using provided slug:', slug.trim());
+    } else {
+      console.log('⚠️ No slug provided, pre-save hook will generate');
+    }
+
+    console.log('💾 Creating ProductType with data:', productTypeData);
+
+    // Create product type
+    const productType = await ProductType.create(productTypeData);
+    
+    console.log('✅ ProductType created successfully:', productType);
 
     res.status(201).json({
       success: true,
@@ -155,6 +172,28 @@ export const findAll = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ FIND ALL PRODUCT TYPES ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy danh sách loại sản phẩm",
+    });
+  }
+};
+
+// ============================================
+// GET ACTIVE PRODUCT TYPES (PUBLIC)
+// ============================================
+export const findActive = async (req, res) => {
+  try {
+    const productTypes = await ProductType.find({ status: "ACTIVE" })
+      .sort({ displayOrder: 1, name: 1 })
+      .select("-createdBy -updatedBy");
+
+    res.json({
+      success: true,
+      data: { types: productTypes },
+    });
+  } catch (error) {
+    console.error("❌ FIND ACTIVE PRODUCT TYPES ERROR:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Lỗi khi lấy danh sách loại sản phẩm",
@@ -398,6 +437,7 @@ export default {
   create,
   update,
   findAll,
+  findActive,
   findOne,
   findBySlug,
   deleteProductType,

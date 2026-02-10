@@ -19,6 +19,7 @@ import {
   TrendingUp,
   History,
   Video,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
@@ -57,6 +58,7 @@ const DashboardLayout = () => {
       items.push(
         { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
         { path: "/admin/employees", icon: Users, label: "Quản lý nhân viên" },
+        { path: "/admin/product-types", icon: Layers, label: "Loại sản phẩm" },
         { path: "/admin/promotions", icon: Tag, label: "Khuyến mãi" },
         { path: "/admin/homepage-editor", icon: Layout, label: "Giao diện trang chủ" },
         { path: "/admin/short-videos", icon: Video, label: "Video ngắn" },

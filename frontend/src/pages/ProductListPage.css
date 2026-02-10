@@ -1,0 +1,16 @@
+/* ============================================
+   FILE: frontend/src/pages/ProductListPage.css
+   ✅ STEP 9: Product List Page Styles
+   ============================================ */
+
+.product-list-page {
+  min-height: 100vh;
+  background: #f8f9fa;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .product-list-page {
+    padding-top: 60px; /* Account for fixed header if exists */
+  }
+}

@@ -22,6 +22,12 @@ const router = express.Router();
 router.get("/", controller.findAll);
 
 /**
+ * GET /api/product-types/active
+ * Get only active product types (public)
+ */
+router.get("/active", controller.findActive);
+
+/**
  * GET /api/product-types/slug/:slug
  * Get product type by slug
  */
